@@ -1,0 +1,21 @@
+name: Code Quality Gate & Linter
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-gate:
+    name: Linter & Coverage Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Verify Coverage Threshold (90%+)
+        run: go run ./tools/cmd/gen-coverage

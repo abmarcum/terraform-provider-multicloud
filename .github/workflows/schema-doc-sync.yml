@@ -1,0 +1,29 @@
+name: Schema & Registry Documentation Sync Check
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify-docs-sync:
+    name: Verify Docs in Sync with Schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Regenerate Documentation
+        run: go run ./tools/cmd/gen-docs
+
+      - name: Fail if Documentation Drift Detected
+        run: |
+          if [ -n "$(git status --porcelain docs/resources/)" ]; then
+            echo "ERROR: Uncommitted documentation drift detected! Run 'go run ./tools/cmd/gen-docs' and commit the generated files."
+            git status --porcelain docs/resources/
+            exit 1
+          fi

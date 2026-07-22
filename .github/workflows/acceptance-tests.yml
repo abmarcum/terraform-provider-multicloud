@@ -1,0 +1,23 @@
+name: Framework Acceptance Tests
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  acceptance-tests:
+    name: Plugin Framework Acceptance Matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Run Acceptance Tests
+        env:
+          TF_ACC: "1"
+        run: go test -v ./internal/resources/...

@@ -1,0 +1,48 @@
+# Compiled binaries & executables
+terraform-provider-multicloud
+api-sync
+*.exe
+*.exe.test
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Output reports, coverage & SBOM artifacts
+multicloud_schema.json
+api_diff_report.json
+sbom.spdx.json
+kratix_multicloud_promise.yaml
+coverage.out
+coverage.html
+coverage.txt
+*.log
+tmp/
+
+# Terraform local directories & state files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*.tfvars
+!*.auto.tfvars
+*.tfvars.json
+
+# macOS OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE & Editor configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

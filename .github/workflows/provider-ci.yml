@@ -1,0 +1,33 @@
+name: Provider Build & Fuzzing CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Verify Binary Build
+        run: go build -v -o terraform-provider-multicloud .
+
+      - name: Run Full Unit Test Suite with Race Detector
+        run: go test -v -race ./...
+
+      - name: Run Sanitizer Fuzz Tests
+        run: go test -v -fuzz=FuzzSanitizeResourceName -fuzztime=20s ./internal/cloud/sanitizer/...
