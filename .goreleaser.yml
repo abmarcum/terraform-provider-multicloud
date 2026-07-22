@@ -1,50 +1,41 @@
-# Ensure version is set to 2
-version: 2
+name: Release Terraform Provider
 
-before:
-  hooks:
-    - go mod tidy
+on:
+  push:
+    tags:
+      - 'v*'
 
-builds:
-  - env:
-      - CGO_ENABLED=0
-    mod_timestamp: '{{ .CommitTimestamp }}'
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}}
-    goos:
-      - freebsd
-      - windows
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-      - arm
-    ignore:
-      - goos: darwin
-        goarch: arm
-    binary: '{{ .ProjectName }}_v{{ .Version }}'
+permissions:
+  contents: write
 
-archives:
-  - format: zip
-    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-checksum:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
-  algorithm: sha256
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
 
-signs:
-  - artifacts: checksum
-    args:
-      - "--batch"
-      - "--pinentry-mode"
-      - "loopback"       
-      - "--local-user"
-      - "{{ .Env.GPG_FINGERPRINT }}"
-      - "--output"
-      - "${signature}"
-      - "--detach-sign"
-      - "${artifact}"
+      - name: Import GPG Key
+        uses: crazy-max/ghaction-import-gpg@v7
+        id: import-gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          #passphrase: ${{ secrets.PASSPHRASE }}
 
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import-gpg.outputs.fingerprint }}
