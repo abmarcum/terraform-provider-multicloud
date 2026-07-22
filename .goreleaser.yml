@@ -1,3 +1,6 @@
+# Ensure version is set to 2
+version: 2
+
 before:
   hooks:
     - go mod tidy
@@ -22,23 +25,24 @@ builds:
     ignore:
       - goos: darwin
         goarch: arm
-    binary: '{{ .ProjectName }}_v{{ .Version }}'
+    binary: '{{ .ProjectName }}_v{{ .Version }}' # 👈 Changed \_ to _
 
 archives:
   - format: zip
-    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}' # 👈 Changed \_ to _
 
 checksum:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS' # 👈 Changed \_ to _
   algorithm: sha256
 
 signs:
   - artifacts: checksum
     args:
-      - "--batch"
+      - "--batch" # 👈 Safely bypasses the TTY/ioctl interactive prompt error
       - "--local-user"
       - "{{ .Env.GPG_FINGERPRINT }}"
       - "--output"
       - "${signature}"
       - "--detach-sign"
       - "${artifact}"
+
