@@ -25,20 +25,22 @@ builds:
     ignore:
       - goos: darwin
         goarch: arm
-    binary: '{{ .ProjectName }}_v{{ .Version }}' # 👈 Changed \_ to _
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
 
 archives:
   - format: zip
-    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}' # 👈 Changed \_ to _
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 
 checksum:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS' # 👈 Changed \_ to _
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
   algorithm: sha256
 
 signs:
   - artifacts: checksum
     args:
-      - "--batch" # 👈 Safely bypasses the TTY/ioctl interactive prompt error
+      - "--batch"
+      - "--pinentry-mode"
+      - "loopback"       
       - "--local-user"
       - "{{ .Env.GPG_FINGERPRINT }}"
       - "--output"
