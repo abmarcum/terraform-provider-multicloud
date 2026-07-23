@@ -3,6 +3,9 @@ name: Code Quality Gate & Linter
 on:
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
 
 jobs:
   quality-gate:
