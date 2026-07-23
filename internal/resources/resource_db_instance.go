@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -111,7 +111,77 @@ func (r *DBInstanceResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/rds/%s", providerType, plan.InstanceName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "db_instance", plan.InstanceName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.InstanceName.IsUnknown() {
+		if val, ok := res.Attributes["instancename"].(string); ok && val != "" {
+			plan.InstanceName = types.StringValue(val)
+		} else {
+			plan.InstanceName = types.StringValue("default-instancename")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.Engine.IsUnknown() {
+		if val, ok := res.Attributes["engine"].(string); ok && val != "" {
+			plan.Engine = types.StringValue(val)
+		} else {
+			plan.Engine = types.StringValue("default-engine")
+		}
+	}
+	if plan.EngineVersion.IsUnknown() {
+		if val, ok := res.Attributes["engineversion"].(string); ok && val != "" {
+			plan.EngineVersion = types.StringValue(val)
+		} else {
+			plan.EngineVersion = types.StringValue("default-engineversion")
+		}
+	}
+	if plan.SizeTier.IsUnknown() {
+		if val, ok := res.Attributes["sizetier"].(string); ok && val != "" {
+			plan.SizeTier = types.StringValue(val)
+		} else {
+			plan.SizeTier = types.StringValue("default-sizetier")
+		}
+	}
+	if plan.Username.IsUnknown() {
+		if val, ok := res.Attributes["username"].(string); ok && val != "" {
+			plan.Username = types.StringValue(val)
+		} else {
+			plan.Username = types.StringValue("default-username")
+		}
+	}
+	if plan.Password.IsUnknown() {
+		if val, ok := res.Attributes["password"].(string); ok && val != "" {
+			plan.Password = types.StringValue(val)
+		} else {
+			plan.Password = types.StringValue("default-password")
+		}
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -121,6 +191,23 @@ func (r *DBInstanceResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.InstanceName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "db_instance", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -130,6 +217,23 @@ func (r *DBInstanceResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.InstanceName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "db_instance", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -139,6 +243,12 @@ func (r *DBInstanceResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "db_instance", state.InstanceName.ValueString(), reg)
 }
 
 func (r *DBInstanceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

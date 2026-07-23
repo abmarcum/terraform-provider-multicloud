@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -85,7 +85,56 @@ func (r *SearchIndexResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/search/%s", providerType, plan.IndexName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "search_index", plan.IndexName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.IndexName.IsUnknown() {
+		if val, ok := res.Attributes["indexname"].(string); ok && val != "" {
+			plan.IndexName = types.StringValue(val)
+		} else {
+			plan.IndexName = types.StringValue("default-indexname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.EngineVersion.IsUnknown() {
+		if val, ok := res.Attributes["engineversion"].(string); ok && val != "" {
+			plan.EngineVersion = types.StringValue(val)
+		} else {
+			plan.EngineVersion = types.StringValue("default-engineversion")
+		}
+	}
+	if plan.InstanceType.IsUnknown() {
+		if val, ok := res.Attributes["instancetype"].(string); ok && val != "" {
+			plan.InstanceType = types.StringValue(val)
+		} else {
+			plan.InstanceType = types.StringValue("default-instancetype")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -95,6 +144,23 @@ func (r *SearchIndexResource) Read(ctx context.Context, req resource.ReadRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.IndexName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "search_index", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -104,6 +170,23 @@ func (r *SearchIndexResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.IndexName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "search_index", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -113,6 +196,12 @@ func (r *SearchIndexResource) Delete(ctx context.Context, req resource.DeleteReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "search_index", state.IndexName.ValueString(), reg)
 }
 
 func (r *SearchIndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

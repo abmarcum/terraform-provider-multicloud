@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -81,7 +81,49 @@ func (r *RouteTableResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/rt/%s", providerType, plan.TableName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "route_table", plan.TableName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.TableName.IsUnknown() {
+		if val, ok := res.Attributes["tablename"].(string); ok && val != "" {
+			plan.TableName = types.StringValue(val)
+		} else {
+			plan.TableName = types.StringValue("default-tablename")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.NetworkID.IsUnknown() {
+		if val, ok := res.Attributes["networkid"].(string); ok && val != "" {
+			plan.NetworkID = types.StringValue(val)
+		} else {
+			plan.NetworkID = types.StringValue("default-networkid")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -91,6 +133,23 @@ func (r *RouteTableResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.TableName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "route_table", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -100,6 +159,23 @@ func (r *RouteTableResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.TableName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "route_table", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -109,6 +185,12 @@ func (r *RouteTableResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "route_table", state.TableName.ValueString(), reg)
 }
 
 func (r *RouteTableResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

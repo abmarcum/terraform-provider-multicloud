@@ -56,9 +56,55 @@ Managing multi-cloud infrastructure traditionally requires writing and maintaini
 
 ---
 
+## Cloud Authentication & Environment Setup
+
+`terraform-provider-multicloud` supports credentials supplied via HCL attributes or environment variables across GCP, AWS, and Azure.
+
+### 1. Google Cloud Platform (GCP)
+- **Application Default Credentials (ADC)**:
+  ```bash
+  gcloud auth application-default login
+  export GCP_PROJECT="your-gcp-project-id"
+  ```
+
+### 2. Amazon Web Services (AWS)
+- **Environment Variables**:
+  ```bash
+  export AWS_REGION="us-west-2"
+  export AWS_ACCESS_KEY_ID="AKIA..."
+  export AWS_SECRET_ACCESS_KEY="wJalr..."
+  export AWS_ACCOUNT_ID="123456789012"
+  ```
+
+### 3. Microsoft Azure
+- **ARM Service Principal / Bearer Authentication**:
+  ```bash
+  export AZURE_SUBSCRIPTION_ID="00000000-0000-0000-0000-000000000000"
+  export AZURE_BEARER_TOKEN="eyJ0eXAiOi..."
+  ```
+
+---
+
+## Security Architecture & Transport Hardening
+
+- **Transport Layer Security (TLS 1.2+)**: All outbound REST calls to cloud management endpoints enforce a minimum TLS 1.2 protocol requirement on a custom `http.Transport`.
+- **REST Parameter Sanitization**: All resource names, project identifiers, and region paths are escaped via `url.PathEscape` and `url.QueryEscape` to prevent REST injection attacks.
+- **Sanitized Diagnostics**: HTTP status error response bodies are sanitized and truncated before returning to Terraform diagnostics to avoid leaking credentials or sensitive tokens into logs.
+
+---
+
 ## System Architecture
 
-The provider executes as an out-of-process gRPC plugin managed by the Terraform CLI. It translates unified Terraform state operations into native cloud API calls using official Go SDKs (`aws-sdk-go-v2`, `cloud.google.com/go`, `azure-sdk-for-go`).
+The provider executes as an out-of-process gRPC plugin managed by the Terraform CLI. It translates unified Terraform state operations into native cloud API calls via modular driver subpackages under `internal/cloud/adapters/`:
+
+```text
+internal/cloud/adapters/
+├── adapter_interface.go  # Facade interface & provider dispatchers
+├── common/               # Shared models & hardened TLS HTTP transport
+├── gcp/                  # GCP REST API driver & ADC auth
+├── aws/                  # AWS SDK v2 & REST driver
+└── azure/                # Azure ARM template driver
+```
 
 ```mermaid
 graph TD

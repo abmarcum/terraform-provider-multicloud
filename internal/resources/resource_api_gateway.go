@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -86,9 +86,56 @@ func (r *APIGatewayResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	name := plan.APIName.ValueString()
-	plan.ID = types.StringValue(fmt.Sprintf("%s/apigw/%s", providerType, name))
-	plan.APIEndpoint = types.StringValue(fmt.Sprintf("https://%s.execute-api.%s.example.com", name, providerType))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "api_gateway", plan.APIName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.APIName.IsUnknown() {
+		if val, ok := res.Attributes["apiname"].(string); ok && val != "" {
+			plan.APIName = types.StringValue(val)
+		} else {
+			plan.APIName = types.StringValue("default-apiname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.ProtocolType.IsUnknown() {
+		if val, ok := res.Attributes["protocoltype"].(string); ok && val != "" {
+			plan.ProtocolType = types.StringValue(val)
+		} else {
+			plan.ProtocolType = types.StringValue("default-protocoltype")
+		}
+	}
+	if plan.APIEndpoint.IsUnknown() {
+		if val, ok := res.Attributes["apiendpoint"].(string); ok && val != "" {
+			plan.APIEndpoint = types.StringValue(val)
+		} else {
+			plan.APIEndpoint = types.StringValue("default-apiendpoint")
+		}
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -98,6 +145,23 @@ func (r *APIGatewayResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.APIName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "api_gateway", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -107,6 +171,23 @@ func (r *APIGatewayResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.APIName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "api_gateway", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -116,6 +197,12 @@ func (r *APIGatewayResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "api_gateway", state.APIName.ValueString(), reg)
 }
 
 func (r *APIGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

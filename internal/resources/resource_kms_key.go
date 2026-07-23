@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -85,9 +85,56 @@ func (r *KMSKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	alias := plan.KeyAlias.ValueString()
-	plan.ID = types.StringValue(fmt.Sprintf("%s/kms/%s", providerType, alias))
-	plan.KeyARNID = types.StringValue(fmt.Sprintf("arn:%s:kms:us-west-2:123456789:key/%s", providerType, alias))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "kms_key", plan.KeyAlias.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.KeyAlias.IsUnknown() {
+		if val, ok := res.Attributes["keyalias"].(string); ok && val != "" {
+			plan.KeyAlias = types.StringValue(val)
+		} else {
+			plan.KeyAlias = types.StringValue("default-keyalias")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.KeyUsage.IsUnknown() {
+		if val, ok := res.Attributes["keyusage"].(string); ok && val != "" {
+			plan.KeyUsage = types.StringValue(val)
+		} else {
+			plan.KeyUsage = types.StringValue("default-keyusage")
+		}
+	}
+	if plan.KeyARNID.IsUnknown() {
+		if val, ok := res.Attributes["keyarnid"].(string); ok && val != "" {
+			plan.KeyARNID = types.StringValue(val)
+		} else {
+			plan.KeyARNID = types.StringValue("default-keyarnid")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -97,6 +144,23 @@ func (r *KMSKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.KeyAlias.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "kms_key", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -106,6 +170,23 @@ func (r *KMSKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.KeyAlias.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "kms_key", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -115,6 +196,12 @@ func (r *KMSKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "kms_key", state.KeyAlias.ValueString(), reg)
 }
 
 func (r *KMSKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

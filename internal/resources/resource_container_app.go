@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -93,7 +93,63 @@ func (r *ContainerAppResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/app/%s", providerType, plan.AppName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "container_app", plan.AppName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.AppName.IsUnknown() {
+		if val, ok := res.Attributes["appname"].(string); ok && val != "" {
+			plan.AppName = types.StringValue(val)
+		} else {
+			plan.AppName = types.StringValue("default-appname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.Image.IsUnknown() {
+		if val, ok := res.Attributes["image"].(string); ok && val != "" {
+			plan.Image = types.StringValue(val)
+		} else {
+			plan.Image = types.StringValue("default-image")
+		}
+	}
+	if plan.CPU.IsUnknown() {
+		if val, ok := res.Attributes["cpu"].(string); ok && val != "" {
+			plan.CPU = types.StringValue(val)
+		} else {
+			plan.CPU = types.StringValue("default-cpu")
+		}
+	}
+	if plan.Memory.IsUnknown() {
+		if val, ok := res.Attributes["memory"].(string); ok && val != "" {
+			plan.Memory = types.StringValue(val)
+		} else {
+			plan.Memory = types.StringValue("default-memory")
+		}
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -103,6 +159,23 @@ func (r *ContainerAppResource) Read(ctx context.Context, req resource.ReadReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.AppName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "container_app", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -112,6 +185,23 @@ func (r *ContainerAppResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.AppName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "container_app", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -121,6 +211,12 @@ func (r *ContainerAppResource) Delete(ctx context.Context, req resource.DeleteRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "container_app", state.AppName.ValueString(), reg)
 }
 
 func (r *ContainerAppResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

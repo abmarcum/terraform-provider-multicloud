@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -85,7 +85,56 @@ func (r *NATGatewayResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/nat/%s", providerType, plan.GatewayName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "nat_gateway", plan.GatewayName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.GatewayName.IsUnknown() {
+		if val, ok := res.Attributes["gatewayname"].(string); ok && val != "" {
+			plan.GatewayName = types.StringValue(val)
+		} else {
+			plan.GatewayName = types.StringValue("default-gatewayname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.SubnetID.IsUnknown() {
+		if val, ok := res.Attributes["subnetid"].(string); ok && val != "" {
+			plan.SubnetID = types.StringValue(val)
+		} else {
+			plan.SubnetID = types.StringValue("default-subnetid")
+		}
+	}
+	if plan.PublicIPID.IsUnknown() {
+		if val, ok := res.Attributes["publicipid"].(string); ok && val != "" {
+			plan.PublicIPID = types.StringValue(val)
+		} else {
+			plan.PublicIPID = types.StringValue("default-publicipid")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -95,6 +144,23 @@ func (r *NATGatewayResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.GatewayName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "nat_gateway", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -104,6 +170,23 @@ func (r *NATGatewayResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.GatewayName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "nat_gateway", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -113,6 +196,12 @@ func (r *NATGatewayResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "nat_gateway", state.GatewayName.ValueString(), reg)
 }
 
 func (r *NATGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

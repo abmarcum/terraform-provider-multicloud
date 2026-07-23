@@ -1,8 +1,9 @@
 package resources
 
 import (
+	"strings"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -94,9 +95,64 @@ func (r *FailoverPolicyResource) Create(ctx context.Context, req resource.Create
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	plan.ID = types.StringValue(fmt.Sprintf("failover/%s", plan.PolicyName.ValueString()))
-	plan.FailoverStatus = types.StringValue("PRIMARY_HEALTHY")
+	providerType := strings.ToLower(plan.PrimaryCloud.ValueString())
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "failover_policy", plan.PolicyName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.PolicyName.IsUnknown() {
+		if val, ok := res.Attributes["policyname"].(string); ok && val != "" {
+			plan.PolicyName = types.StringValue(val)
+		} else {
+			plan.PolicyName = types.StringValue("default-policyname")
+		}
+	}
+	if plan.PrimaryCloud.IsUnknown() {
+		if val, ok := res.Attributes["primarycloud"].(string); ok && val != "" {
+			plan.PrimaryCloud = types.StringValue(val)
+		} else {
+			plan.PrimaryCloud = types.StringValue("default-primarycloud")
+		}
+	}
+	if plan.FailoverCloud.IsUnknown() {
+		if val, ok := res.Attributes["failovercloud"].(string); ok && val != "" {
+			plan.FailoverCloud = types.StringValue(val)
+		} else {
+			plan.FailoverCloud = types.StringValue("default-failovercloud")
+		}
+	}
+	if plan.HealthCheckURL.IsUnknown() {
+		if val, ok := res.Attributes["healthcheckurl"].(string); ok && val != "" {
+			plan.HealthCheckURL = types.StringValue(val)
+		} else {
+			plan.HealthCheckURL = types.StringValue("default-healthcheckurl")
+		}
+	}
+	if plan.FailoverStatus.IsUnknown() {
+		if val, ok := res.Attributes["failoverstatus"].(string); ok && val != "" {
+			plan.FailoverStatus = types.StringValue(val)
+		} else {
+			plan.FailoverStatus = types.StringValue("default-failoverstatus")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -106,6 +162,23 @@ func (r *FailoverPolicyResource) Read(ctx context.Context, req resource.ReadRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.PrimaryCloud.IsNull() && state.PrimaryCloud.ValueString() != "" {
+		pType = state.PrimaryCloud.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.PolicyName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "failover_policy", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -115,6 +188,23 @@ func (r *FailoverPolicyResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.PrimaryCloud.IsNull() && plan.PrimaryCloud.ValueString() != "" {
+		pType = plan.PrimaryCloud.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.PolicyName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "failover_policy", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -124,6 +214,12 @@ func (r *FailoverPolicyResource) Delete(ctx context.Context, req resource.Delete
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.PrimaryCloud.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "failover_policy", state.PolicyName.ValueString(), reg)
 }
 
 func (r *FailoverPolicyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

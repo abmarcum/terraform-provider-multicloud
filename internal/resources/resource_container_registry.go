@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -89,12 +89,56 @@ func (r *ContainerRegistryResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	repoName := plan.RepositoryName.ValueString()
-	if repoName == "" {
-		repoName = plan.RegistryName.ValueString()
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
 	}
-	plan.ID = types.StringValue(fmt.Sprintf("%s/cr/%s", providerType, repoName))
-	plan.RepositoryURL = types.StringValue(fmt.Sprintf("registry.%s.example.com/%s", providerType, repoName))
+	res, err := adapters.CreateCloudResource(ctx, providerType, "container_registry", plan.RepositoryName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.RepositoryName.IsUnknown() {
+		if val, ok := res.Attributes["repositoryname"].(string); ok && val != "" {
+			plan.RepositoryName = types.StringValue(val)
+		} else {
+			plan.RepositoryName = types.StringValue("default-repositoryname")
+		}
+	}
+	if plan.RegistryName.IsUnknown() {
+		if val, ok := res.Attributes["registryname"].(string); ok && val != "" {
+			plan.RegistryName = types.StringValue(val)
+		} else {
+			plan.RegistryName = types.StringValue("default-registryname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.RepositoryURL.IsUnknown() {
+		if val, ok := res.Attributes["repositoryurl"].(string); ok && val != "" {
+			plan.RepositoryURL = types.StringValue(val)
+		} else {
+			plan.RepositoryURL = types.StringValue("default-repositoryurl")
+		}
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -104,6 +148,23 @@ func (r *ContainerRegistryResource) Read(ctx context.Context, req resource.ReadR
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.RepositoryName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "container_registry", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -113,6 +174,23 @@ func (r *ContainerRegistryResource) Update(ctx context.Context, req resource.Upd
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.RepositoryName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "container_registry", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -122,6 +200,12 @@ func (r *ContainerRegistryResource) Delete(ctx context.Context, req resource.Del
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "container_registry", state.RepositoryName.ValueString(), reg)
 }
 
 func (r *ContainerRegistryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

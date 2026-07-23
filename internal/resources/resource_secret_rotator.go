@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -89,10 +89,56 @@ func (r *SecretRotatorResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	name := plan.RotationName.ValueString()
-
-	plan.ID = types.StringValue(fmt.Sprintf("%s/rotator/%s", providerType, name))
-	plan.RotationStatus = types.StringValue("ROTATION_ENABLED")
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "secret_rotator", plan.RotationName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.RotationName.IsUnknown() {
+		if val, ok := res.Attributes["rotationname"].(string); ok && val != "" {
+			plan.RotationName = types.StringValue(val)
+		} else {
+			plan.RotationName = types.StringValue("default-rotationname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.SecretID.IsUnknown() {
+		if val, ok := res.Attributes["secretid"].(string); ok && val != "" {
+			plan.SecretID = types.StringValue(val)
+		} else {
+			plan.SecretID = types.StringValue("default-secretid")
+		}
+	}
+	if plan.RotationStatus.IsUnknown() {
+		if val, ok := res.Attributes["rotationstatus"].(string); ok && val != "" {
+			plan.RotationStatus = types.StringValue(val)
+		} else {
+			plan.RotationStatus = types.StringValue("default-rotationstatus")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -102,6 +148,23 @@ func (r *SecretRotatorResource) Read(ctx context.Context, req resource.ReadReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.RotationName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "secret_rotator", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -111,6 +174,23 @@ func (r *SecretRotatorResource) Update(ctx context.Context, req resource.UpdateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.RotationName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "secret_rotator", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -120,6 +200,12 @@ func (r *SecretRotatorResource) Delete(ctx context.Context, req resource.DeleteR
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "secret_rotator", state.RotationName.ValueString(), reg)
 }
 
 func (r *SecretRotatorResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

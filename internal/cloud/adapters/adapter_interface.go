@@ -2,25 +2,17 @@ package adapters
 
 import (
 	"context"
+	"strings"
+
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/aws"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/azure"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/common"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/gcp"
 )
 
-// ResourceRequest represents a unified resource payload for cloud operations
-type ResourceRequest struct {
-	ResourceName string
-	ResourceType string
-	ProviderType string
-	Region       string
-	Attributes   map[string]interface{}
-}
+type ResourceRequest = common.ResourceRequest
+type ResourceResponse = common.ResourceResponse
 
-// ResourceResponse represents a cloud operation result payload
-type ResourceResponse struct {
-	ID         string
-	Status     string
-	Attributes map[string]interface{}
-}
-
-// CloudAdapter defines the uniform interface for target cloud SDK drivers (AWS, GCP, Azure)
 type CloudAdapter interface {
 	CreateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error)
 	ReadResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error)
@@ -28,59 +20,59 @@ type CloudAdapter interface {
 	DeleteResource(ctx context.Context, req ResourceRequest) error
 }
 
-// AWSAdapter implements CloudAdapter for AWS SDK v2
-type AWSAdapter struct{}
+type AWSAdapter = aws.AWSAdapter
+type GCPAdapter = gcp.GCPAdapter
+type AzureAdapter = azure.AzureAdapter
 
-func (a *AWSAdapter) CreateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{
-		ID:     "aws/" + req.Region + "/" + req.ResourceName,
-		Status: "ACTIVE",
-	}, nil
-}
-func (a *AWSAdapter) ReadResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{ID: req.ResourceName, Status: "ACTIVE"}, nil
-}
-func (a *AWSAdapter) UpdateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{ID: req.ResourceName, Status: "ACTIVE"}, nil
-}
-func (a *AWSAdapter) DeleteResource(ctx context.Context, req ResourceRequest) error {
-	return nil
+func CreateCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string, extraAttrs map[string]interface{}) (ResourceResponse, error) {
+	adapter := getAdapter(providerType)
+	return adapter.CreateResource(ctx, ResourceRequest{
+		ResourceName: resourceName,
+		ResourceType: resourceType,
+		ProviderType: providerType,
+		Region:       region,
+		Attributes:   extraAttrs,
+	})
 }
 
-// GCPAdapter implements CloudAdapter for GCP Go SDK
-type GCPAdapter struct{}
-
-func (a *GCPAdapter) CreateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{
-		ID:     "gcp/" + req.Region + "/" + req.ResourceName,
-		Status: "RUNNING",
-	}, nil
-}
-func (a *GCPAdapter) ReadResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{ID: req.ResourceName, Status: "RUNNING"}, nil
-}
-func (a *GCPAdapter) UpdateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{ID: req.ResourceName, Status: "RUNNING"}, nil
-}
-func (a *GCPAdapter) DeleteResource(ctx context.Context, req ResourceRequest) error {
-	return nil
+func ReadCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string) (ResourceResponse, error) {
+	adapter := getAdapter(providerType)
+	return adapter.ReadResource(ctx, ResourceRequest{
+		ResourceName: resourceName,
+		ResourceType: resourceType,
+		ProviderType: providerType,
+		Region:       region,
+	})
 }
 
-// AzureAdapter implements CloudAdapter for Azure ARM SDK
-type AzureAdapter struct{}
+func UpdateCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string, extraAttrs map[string]interface{}) (ResourceResponse, error) {
+	adapter := getAdapter(providerType)
+	return adapter.UpdateResource(ctx, ResourceRequest{
+		ResourceName: resourceName,
+		ResourceType: resourceType,
+		ProviderType: providerType,
+		Region:       region,
+		Attributes:   extraAttrs,
+	})
+}
 
-func (a *AzureAdapter) CreateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{
-		ID:     "azure/" + req.ResourceName,
-		Status: "SUCCEEDED",
-	}, nil
+func DeleteCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string) error {
+	adapter := getAdapter(providerType)
+	return adapter.DeleteResource(ctx, ResourceRequest{
+		ResourceName: resourceName,
+		ResourceType: resourceType,
+		ProviderType: providerType,
+		Region:       region,
+	})
 }
-func (a *AzureAdapter) ReadResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{ID: req.ResourceName, Status: "SUCCEEDED"}, nil
-}
-func (a *AzureAdapter) UpdateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error) {
-	return ResourceResponse{ID: req.ResourceName, Status: "SUCCEEDED"}, nil
-}
-func (a *AzureAdapter) DeleteResource(ctx context.Context, req ResourceRequest) error {
-	return nil
+
+func getAdapter(providerType string) CloudAdapter {
+	switch strings.ToLower(providerType) {
+	case "aws":
+		return &aws.AWSAdapter{}
+	case "azure":
+		return &azure.AzureAdapter{}
+	default:
+		return &gcp.GCPAdapter{}
+	}
 }

@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -95,13 +95,78 @@ func (r *DataSyncResource) Create(ctx context.Context, req resource.CreateReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	name := plan.SyncName.ValueString()
-	src := strings.ToLower(plan.SourceProvider.ValueString())
-	dst := strings.ToLower(plan.DestProvider.ValueString())
-
-	plan.ID = types.StringValue(fmt.Sprintf("datasync/%s/%s-to-%s", name, src, dst))
-	plan.SyncStatus = types.StringValue("REPLICATION_ACTIVE")
+	providerType := strings.ToLower(plan.SourceProvider.ValueString())
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "data_sync", plan.SyncName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.SyncName.IsUnknown() {
+		if val, ok := res.Attributes["syncname"].(string); ok && val != "" {
+			plan.SyncName = types.StringValue(val)
+		} else {
+			plan.SyncName = types.StringValue("default-syncname")
+		}
+	}
+	if plan.SourceProvider.IsUnknown() {
+		if val, ok := res.Attributes["sourceprovider"].(string); ok && val != "" {
+			plan.SourceProvider = types.StringValue(val)
+		} else {
+			plan.SourceProvider = types.StringValue("default-sourceprovider")
+		}
+	}
+	if plan.SourceBucket.IsUnknown() {
+		if val, ok := res.Attributes["sourcebucket"].(string); ok && val != "" {
+			plan.SourceBucket = types.StringValue(val)
+		} else {
+			plan.SourceBucket = types.StringValue("default-sourcebucket")
+		}
+	}
+	if plan.DestProvider.IsUnknown() {
+		if val, ok := res.Attributes["destprovider"].(string); ok && val != "" {
+			plan.DestProvider = types.StringValue(val)
+		} else {
+			plan.DestProvider = types.StringValue("default-destprovider")
+		}
+	}
+	if plan.DestBucket.IsUnknown() {
+		if val, ok := res.Attributes["destbucket"].(string); ok && val != "" {
+			plan.DestBucket = types.StringValue(val)
+		} else {
+			plan.DestBucket = types.StringValue("default-destbucket")
+		}
+	}
+	if plan.SyncSchedule.IsUnknown() {
+		if val, ok := res.Attributes["syncschedule"].(string); ok && val != "" {
+			plan.SyncSchedule = types.StringValue(val)
+		} else {
+			plan.SyncSchedule = types.StringValue("default-syncschedule")
+		}
+	}
+	if plan.SyncStatus.IsUnknown() {
+		if val, ok := res.Attributes["syncstatus"].(string); ok && val != "" {
+			plan.SyncStatus = types.StringValue(val)
+		} else {
+			plan.SyncStatus = types.StringValue("default-syncstatus")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -111,6 +176,23 @@ func (r *DataSyncResource) Read(ctx context.Context, req resource.ReadRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.SourceProvider.IsNull() && state.SourceProvider.ValueString() != "" {
+		pType = state.SourceProvider.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.SyncName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "data_sync", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -120,6 +202,23 @@ func (r *DataSyncResource) Update(ctx context.Context, req resource.UpdateReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.SourceProvider.IsNull() && plan.SourceProvider.ValueString() != "" {
+		pType = plan.SourceProvider.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.SyncName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "data_sync", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -129,6 +228,12 @@ func (r *DataSyncResource) Delete(ctx context.Context, req resource.DeleteReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.SourceProvider.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "data_sync", state.SyncName.ValueString(), reg)
 }
 
 func (r *DataSyncResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

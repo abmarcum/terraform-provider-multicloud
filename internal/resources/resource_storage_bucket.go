@@ -1,21 +1,16 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/abmarcum/multi-cloud-provider/internal/cloud/resiliency"
-	"github.com/abmarcum/multi-cloud-provider/internal/cloud/sanitizer"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	gcpstorage "cloud.google.com/go/storage"
-	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 var _ resource.Resource = &StorageBucketResource{}
@@ -97,67 +92,43 @@ func (r *StorageBucketResource) Create(ctx context.Context, req resource.CreateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	rawName := plan.BucketName.ValueString()
-	sanitizedName := sanitizer.SanitizeResourceName(rawName, providerType, "storage_bucket")
-
-	switch providerType {
-	case "aws":
-		// Call AWS S3 API via retry middleware
-		_, err := resiliency.ExecuteWithRetry(ctx, func() (*awss3.CreateBucketOutput, error) {
-			cm, ok := r.clientManager.(interface {
-				GetAWSS3Client() (*awss3.Client, error)
-			})
-			if !ok {
-				return nil, fmt.Errorf("AWS client not configured")
-			}
-			s3Client, err := cm.GetAWSS3Client()
-			if err != nil {
-				return nil, err
-			}
-			return s3Client.CreateBucket(ctx, &awss3.CreateBucketInput{
-				Bucket: &sanitizedName,
-			})
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("AWS S3 CreateBucket Error", err.Error())
-			return
-		}
-		plan.ID = types.StringValue(fmt.Sprintf("aws/%s/%s", plan.Region.ValueString(), sanitizedName))
-
-	case "gcp":
-		_, err := resiliency.ExecuteWithRetry(ctx, func() (bool, error) {
-			cm, ok := r.clientManager.(interface {
-				GetGCPStorageClient() (*gcpstorage.Client, error)
-			})
-			if !ok {
-				return false, fmt.Errorf("GCP client not configured")
-			}
-			gcsClient, err := cm.GetGCPStorageClient()
-			if err != nil {
-				return false, err
-			}
-			bucket := gcsClient.Bucket(sanitizedName)
-			err = bucket.Create(ctx, "my-gcp-project", &gcpstorage.BucketAttrs{
-				Location: plan.Region.ValueString(),
-			})
-			return true, err
-		})
-		if err != nil {
-			resp.Diagnostics.AddError("GCP Storage CreateBucket Error", err.Error())
-			return
-		}
-		plan.ID = types.StringValue(fmt.Sprintf("gcp/%s/%s", plan.Region.ValueString(), sanitizedName))
-
-	case "azure":
-		plan.ID = types.StringValue(fmt.Sprintf("azure/%s", sanitizedName))
-
-	default:
-		resp.Diagnostics.AddError("Unsupported Provider", fmt.Sprintf("Provider type '%s' is not supported.", providerType))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "storage_bucket", plan.BucketName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
 	}
-
+	plan.ID = types.StringValue(res.ID)
+	if plan.BucketName.IsUnknown() {
+		if val, ok := res.Attributes["bucketname"].(string); ok && val != "" {
+			plan.BucketName = types.StringValue(val)
+		} else {
+			plan.BucketName = types.StringValue("default-bucketname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -167,6 +138,23 @@ func (r *StorageBucketResource) Read(ctx context.Context, req resource.ReadReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.BucketName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "storage_bucket", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -176,6 +164,23 @@ func (r *StorageBucketResource) Update(ctx context.Context, req resource.UpdateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.BucketName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "storage_bucket", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -185,6 +190,12 @@ func (r *StorageBucketResource) Delete(ctx context.Context, req resource.DeleteR
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "storage_bucket", state.BucketName.ValueString(), reg)
 }
 
 func (r *StorageBucketResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

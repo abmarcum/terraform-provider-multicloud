@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -89,9 +89,56 @@ func (r *CDNDistributionResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	name := plan.DistributionName.ValueString()
-	plan.ID = types.StringValue(fmt.Sprintf("%s/cdn/%s", providerType, name))
-	plan.DomainName = types.StringValue(fmt.Sprintf("%s.cdn.%s.example.com", name, providerType))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "cdn_distribution", plan.DistributionName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.DistributionName.IsUnknown() {
+		if val, ok := res.Attributes["distributionname"].(string); ok && val != "" {
+			plan.DistributionName = types.StringValue(val)
+		} else {
+			plan.DistributionName = types.StringValue("default-distributionname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.OriginDomain.IsUnknown() {
+		if val, ok := res.Attributes["origindomain"].(string); ok && val != "" {
+			plan.OriginDomain = types.StringValue(val)
+		} else {
+			plan.OriginDomain = types.StringValue("default-origindomain")
+		}
+	}
+	if plan.DomainName.IsUnknown() {
+		if val, ok := res.Attributes["domainname"].(string); ok && val != "" {
+			plan.DomainName = types.StringValue(val)
+		} else {
+			plan.DomainName = types.StringValue("default-domainname")
+		}
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -101,6 +148,23 @@ func (r *CDNDistributionResource) Read(ctx context.Context, req resource.ReadReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.DistributionName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "cdn_distribution", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -110,6 +174,23 @@ func (r *CDNDistributionResource) Update(ctx context.Context, req resource.Updat
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.DistributionName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "cdn_distribution", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -119,6 +200,12 @@ func (r *CDNDistributionResource) Delete(ctx context.Context, req resource.Delet
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "cdn_distribution", state.DistributionName.ValueString(), reg)
 }
 
 func (r *CDNDistributionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

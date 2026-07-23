@@ -1,8 +1,8 @@
 package resources
 
 import (
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -89,7 +89,63 @@ func (r *VPCPeeringResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/peering/%s", providerType, plan.PeeringName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "vpc_peering", plan.PeeringName.ValueString(), reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.PeeringName.IsUnknown() {
+		if val, ok := res.Attributes["peeringname"].(string); ok && val != "" {
+			plan.PeeringName = types.StringValue(val)
+		} else {
+			plan.PeeringName = types.StringValue("default-peeringname")
+		}
+	}
+	if plan.ProviderType.IsUnknown() {
+		if val, ok := res.Attributes["providertype"].(string); ok && val != "" {
+			plan.ProviderType = types.StringValue(val)
+		} else {
+			plan.ProviderType = types.StringValue("default-providertype")
+		}
+	}
+	if plan.VPCID.IsUnknown() {
+		if val, ok := res.Attributes["vpcid"].(string); ok && val != "" {
+			plan.VPCID = types.StringValue(val)
+		} else {
+			plan.VPCID = types.StringValue("default-vpcid")
+		}
+	}
+	if plan.PeerVPCID.IsUnknown() {
+		if val, ok := res.Attributes["peervpcid"].(string); ok && val != "" {
+			plan.PeerVPCID = types.StringValue(val)
+		} else {
+			plan.PeerVPCID = types.StringValue("default-peervpcid")
+		}
+	}
+	if plan.PeerRegion.IsUnknown() {
+		if val, ok := res.Attributes["peerregion"].(string); ok && val != "" {
+			plan.PeerRegion = types.StringValue(val)
+		} else {
+			plan.PeerRegion = types.StringValue("default-peerregion")
+		}
+	}
+	if plan.Region.IsUnknown() {
+		if val, ok := res.Attributes["region"].(string); ok && val != "" {
+			plan.Region = types.StringValue(val)
+		} else {
+			plan.Region = types.StringValue("default-region")
+		}
+	}
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -99,6 +155,23 @@ func (r *VPCPeeringResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
+		pType = state.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !state.Region.IsNull() && state.Region.ValueString() != "" {
+		reg = state.Region.ValueString()
+	}
+
+	resName := state.PeeringName.ValueString()
+	_, err := adapters.ReadCloudResource(ctx, pType, "vpc_peering", resName, reg)
+	if err != nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -108,6 +181,23 @@ func (r *VPCPeeringResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	pType := "gcp"
+	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
+		pType = plan.ProviderType.ValueString()
+	}
+	reg := "us-central1"
+	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
+		reg = plan.Region.ValueString()
+	}
+
+	resName := plan.PeeringName.ValueString()
+	_, err := adapters.UpdateCloudResource(ctx, pType, "vpc_peering", resName, reg, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -117,6 +207,12 @@ func (r *VPCPeeringResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	pType := strings.ToLower(state.ProviderType.ValueString())
+	reg := ""
+	if !state.Region.IsNull() && !state.Region.IsUnknown() {
+		reg = state.Region.ValueString()
+	}
+	_ = adapters.DeleteCloudResource(ctx, pType, "vpc_peering", state.PeeringName.ValueString(), reg)
 }
 
 func (r *VPCPeeringResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
