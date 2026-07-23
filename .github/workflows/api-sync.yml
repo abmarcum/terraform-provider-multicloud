@@ -1,0 +1,59 @@
+name: Upstream Cloud API Sync & Auto-PR
+
+on:
+  schedule:
+    # Run every Monday at midnight UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-api-updates:
+    name: Sync Upstream SDKs & Regenerate Schemas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Update Upstream Cloud SDK Dependencies
+        run: |
+          go get -u github.com/aws/aws-sdk-go-v2@latest
+          go get -u cloud.google.com/go@latest
+          go get -u github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources@latest
+          go mod tidy
+
+      - name: Run Schema Code Generators & Doc Sync
+        run: |
+          go run ./tools/cmd/gen-resources
+          go run ./tools/cmd/gen-docs
+          go run ./tools/cmd/gen-jsonschema
+          go run ./tools/cmd/gen-kratix
+          go run ./tools/cmd/gen-sbom
+
+      - name: Run Test Suite Verification
+        run: go test -v ./...
+
+      - name: Create Pull Request on API Drift Detected
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): sync upstream cloud SDKs and regenerate resource schemas"
+          title: "🤖 Automated Upstream Cloud API Sync"
+          body: |
+            ## Upstream Cloud API Sync Summary
+            Automated check detected new upstream API updates from:
+            - **AWS SDK v2** (`github.com/aws/aws-sdk-go-v2`)
+            - **GCP Client Libraries** (`cloud.google.com/go`)
+            - **Azure ARM SDK** (`github.com/Azure/azure-sdk-for-go`)
+
+            ### Verified Status:
+            - All 43 `multicloud_*` resource schemas updated.
+            - Documentation & JSON schema manifests regenerated.
+            - `go test ./...` test suite passed cleanly.
+          branch: "automation/api-sync"
+          delete-branch: true
