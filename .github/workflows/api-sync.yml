@@ -39,7 +39,7 @@ jobs:
         run: go test -v ./...
 
       - name: Create Pull Request on API Drift Detected
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore(deps): sync upstream cloud SDKs and regenerate resource schemas"
