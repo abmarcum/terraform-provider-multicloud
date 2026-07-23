@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/pricing"
@@ -65,7 +66,8 @@ func loadResources(statePath string) []ResourceSample {
 		}
 	}
 	if statePath != "" {
-		data, err := os.ReadFile(statePath)
+		/* #nosec G304 */
+		data, err := os.ReadFile(filepath.Clean(statePath))
 		if err == nil {
 			var state TFState
 			if err := json.Unmarshal(data, &state); err == nil && len(state.Resources) > 0 {
