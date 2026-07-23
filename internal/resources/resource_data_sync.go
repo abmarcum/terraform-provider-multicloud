@@ -29,6 +29,8 @@ type DataSyncModel struct {
 	DestBucket        types.String `tfsdk:"destination_bucket"`
 	SyncSchedule      types.String `tfsdk:"sync_schedule"`
 	SyncStatus        types.String `tfsdk:"sync_status"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewDataSyncResource() resource.Resource {
@@ -66,6 +68,14 @@ func (r *DataSyncResource) Schema(ctx context.Context, req resource.SchemaReques
 				Optional: true,
 			},
 			"sync_status": schema.StringAttribute{
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
 		},
@@ -114,6 +124,11 @@ func (r *DataSyncResource) Update(ctx context.Context, req resource.UpdateReques
 }
 
 func (r *DataSyncResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state DataSyncModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *DataSyncResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

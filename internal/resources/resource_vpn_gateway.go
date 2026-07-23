@@ -26,6 +26,8 @@ type VPNGatewayModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	NetworkID    types.String `tfsdk:"network_id"`
 	PublicIP     types.String `tfsdk:"public_ip"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewVPNGatewayResource() resource.Resource {
@@ -55,6 +57,14 @@ func (r *VPNGatewayResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Optional: true,
 			},
 			"public_ip": schema.StringAttribute{
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
 		},
@@ -99,6 +109,11 @@ func (r *VPNGatewayResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *VPNGatewayResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state VPNGatewayModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *VPNGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

@@ -26,6 +26,8 @@ type SearchIndexModel struct {
 	ProviderType  types.String `tfsdk:"provider_type"`
 	EngineVersion types.String `tfsdk:"engine_version"`
 	InstanceType  types.String `tfsdk:"instance_type"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewSearchIndexResource() resource.Resource {
@@ -56,6 +58,14 @@ func (r *SearchIndexResource) Schema(ctx context.Context, req resource.SchemaReq
 			},
 			"instance_type": schema.StringAttribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -98,6 +108,11 @@ func (r *SearchIndexResource) Update(ctx context.Context, req resource.UpdateReq
 }
 
 func (r *SearchIndexResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state SearchIndexModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *SearchIndexResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

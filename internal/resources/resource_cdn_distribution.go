@@ -27,6 +27,8 @@ type CDNDistributionModel struct {
 	OriginDomain     types.String `tfsdk:"origin_domain"`
 	Enabled          types.Bool   `tfsdk:"enabled"`
 	DomainName       types.String `tfsdk:"domain_name"`
+	Region           types.String `tfsdk:"region"`
+	ExtraConfig      types.Map    `tfsdk:"extra_config"`
 }
 
 func NewCDNDistributionResource() resource.Resource {
@@ -60,6 +62,14 @@ func (r *CDNDistributionResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"domain_name": schema.StringAttribute{
 				Computed: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -104,6 +114,11 @@ func (r *CDNDistributionResource) Update(ctx context.Context, req resource.Updat
 }
 
 func (r *CDNDistributionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state CDNDistributionModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *CDNDistributionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

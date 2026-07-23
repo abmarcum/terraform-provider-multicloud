@@ -21,14 +21,19 @@ type DBInstanceResource struct {
 }
 
 type DBInstanceModel struct {
-	ID           types.String `tfsdk:"id"`
-	InstanceName types.String `tfsdk:"instance_name"`
-	ProviderType types.String `tfsdk:"provider_type"`
-	Engine       types.String `tfsdk:"engine"`
-	SizeTier     types.String `tfsdk:"size_tier"`
-	StorageGB    types.Int64  `tfsdk:"storage_gb"`
-	Username     types.String `tfsdk:"username"`
-	Password     types.String `tfsdk:"password"`
+	ID                  types.String `tfsdk:"id"`
+	InstanceName        types.String `tfsdk:"instance_name"`
+	ProviderType        types.String `tfsdk:"provider_type"`
+	Engine              types.String `tfsdk:"engine"`
+	EngineVersion       types.String `tfsdk:"engine_version"`
+	SizeTier            types.String `tfsdk:"size_tier"`
+	StorageGB           types.Int64  `tfsdk:"storage_gb"`
+	MultiAZ             types.Bool   `tfsdk:"multi_az"`
+	BackupRetentionDays types.Int64  `tfsdk:"backup_retention_days"`
+	Username            types.String `tfsdk:"username"`
+	Password            types.String `tfsdk:"password"`
+	Region              types.String `tfsdk:"region"`
+	ExtraConfig         types.Map    `tfsdk:"extra_config"`
 }
 
 func NewDBInstanceResource() resource.Resource {
@@ -58,10 +63,19 @@ func (r *DBInstanceResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Optional:    true,
 				Description: "Database engine: 'postgres' or 'mysql'.",
 			},
+			"engine_version": schema.StringAttribute{
+				Optional: true,
+			},
 			"size_tier": schema.StringAttribute{
 				Optional: true,
 			},
 			"storage_gb": schema.Int64Attribute{
+				Optional: true,
+			},
+			"multi_az": schema.BoolAttribute{
+				Optional: true,
+			},
+			"backup_retention_days": schema.Int64Attribute{
 				Optional: true,
 			},
 			"username": schema.StringAttribute{
@@ -70,6 +84,14 @@ func (r *DBInstanceResource) Schema(ctx context.Context, req resource.SchemaRequ
 			"password": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -112,6 +134,11 @@ func (r *DBInstanceResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *DBInstanceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state DBInstanceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *DBInstanceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

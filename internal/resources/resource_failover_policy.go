@@ -28,6 +28,7 @@ type FailoverPolicyModel struct {
 	AutoFailover   types.Bool   `tfsdk:"auto_failover"`
 	FailoverStatus types.String `tfsdk:"failover_status"`
 	ExtraConfig    types.Map    `tfsdk:"extra_config"`
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewFailoverPolicyResource() resource.Resource {
@@ -72,6 +73,10 @@ func (r *FailoverPolicyResource) Schema(ctx context.Context, req resource.Schema
 				Optional:    true,
 				Description: "Cloud-specific escape hatch key-value parameters passed to upstream cloud SDKs.",
 			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
 		},
 	}
 }
@@ -114,6 +119,11 @@ func (r *FailoverPolicyResource) Update(ctx context.Context, req resource.Update
 }
 
 func (r *FailoverPolicyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state FailoverPolicyModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *FailoverPolicyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

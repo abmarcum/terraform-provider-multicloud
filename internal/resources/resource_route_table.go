@@ -25,6 +25,8 @@ type RouteTableModel struct {
 	TableName    types.String `tfsdk:"table_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	NetworkID    types.String `tfsdk:"network_id"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewRouteTableResource() resource.Resource {
@@ -52,6 +54,14 @@ func (r *RouteTableResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"network_id": schema.StringAttribute{
 				Required: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -94,6 +104,11 @@ func (r *RouteTableResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *RouteTableResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state RouteTableModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *RouteTableResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

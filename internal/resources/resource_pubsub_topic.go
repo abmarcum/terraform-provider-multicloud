@@ -25,6 +25,8 @@ type PubSubTopicModel struct {
 	TopicName    types.String `tfsdk:"topic_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	TopicARNID   types.String `tfsdk:"topic_arn_id"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewPubSubTopicResource() resource.Resource {
@@ -51,6 +53,14 @@ func (r *PubSubTopicResource) Schema(ctx context.Context, req resource.SchemaReq
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"topic_arn_id": schema.StringAttribute{
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
 		},
@@ -96,6 +106,11 @@ func (r *PubSubTopicResource) Update(ctx context.Context, req resource.UpdateReq
 }
 
 func (r *PubSubTopicResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state PubSubTopicModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *PubSubTopicResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

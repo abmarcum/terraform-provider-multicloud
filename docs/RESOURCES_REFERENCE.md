@@ -1,6 +1,6 @@
 # Multi-Cloud Terraform Provider (`terraform-provider-multicloud`) Resources Reference Manual
 
-This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **33 unified resources** provided by `terraform-provider-multicloud`.
+This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **43 unified resources** provided by `terraform-provider-multicloud`.
 
 ---
 
@@ -386,3 +386,110 @@ Unified cloud monitoring dashboard.
 - **Attributes:**
   - `dashboard_name` (String, Required) - Dashboard name.
   - `dashboard_body` (String, Optional) - JSON dashboard widget definition.
+
+---
+
+## 8. New Enterprise Extensions
+
+### `multicloud_container_app`
+Unified serverless container workload app.
+- **AWS Target:** `aws_apprunner_service` / ECS Fargate
+- **GCP Target:** `google_cloud_run_v2_service`
+- **Azure Target:** `azurerm_container_app`
+- **Attributes:**
+  - `app_name` (String, Required) - App service name.
+  - `image` (String, Optional) - Container image URI.
+  - `cpu` (String, Optional) - CPU specification.
+  - `memory` (String, Optional) - Memory specification.
+  - `port` (Int64, Optional) - Container port.
+
+### `multicloud_bastion_host`
+Unified managed SSH bastion jump host.
+- **AWS Target:** `aws_ec2_instance_connect_endpoint`
+- **GCP Target:** `google_iap_tunnel`
+- **Azure Target:** `azurerm_bastion_host`
+- **Attributes:**
+  - `host_name` (String, Required) - Bastion host name.
+  - `vpc_id` (String, Optional) - Parent VPC ID.
+  - `subnet_id` (String, Optional) - Target Subnet ID.
+
+### `multicloud_waf_policy`
+Unified Web Application Firewall policy.
+- **AWS Target:** `aws_wafv2_web_acl`
+- **GCP Target:** `google_compute_security_policy` (Cloud Armor)
+- **Azure Target:** `azurerm_web_application_firewall_policy`
+- **Attributes:**
+  - `policy_name` (String, Required) - WAF policy name.
+  - `default_action` (String, Optional) - Default action ('allow' or 'block').
+
+### `multicloud_vpc_peering`
+Unified Virtual Private Network Peering Connection.
+- **AWS Target:** `aws_vpc_peering_connection`
+- **GCP Target:** `google_compute_network_peering`
+- **Azure Target:** `azurerm_virtual_network_peering`
+- **Attributes:**
+  - `peering_name` (String, Required) - Peering connection name.
+  - `vpc_id` (String, Optional) - Local VPC ID.
+  - `peer_vpc_id` (String, Optional) - Remote VPC ID.
+  - `peer_region` (String, Optional) - Remote VPC region.
+
+### `multicloud_app_config`
+Unified key-value application configuration store.
+- **AWS Target:** `aws_ssm_parameter`
+- **GCP Target:** `google_runtimeconfig_config`
+- **Azure Target:** `azurerm_app_configuration`
+- **Attributes:**
+  - `config_name` (String, Required) - Config store name.
+  - `config_key` (String, Optional) - Parameter key.
+  - `config_value` (String, Optional) - Parameter value.
+
+### `multicloud_ai_endpoint`
+Unified AI / Machine Learning inference model endpoint.
+- **AWS Target:** `aws_sagemaker_endpoint` / Bedrock
+- **GCP Target:** `google_vertex_ai_endpoint`
+- **Azure Target:** `azurerm_cognitive_account` (Azure OpenAI)
+- **Attributes:**
+  - `endpoint_name` (String, Required) - Inference endpoint name.
+  - `model_name` (String, Optional) - Deployed model identifier.
+  - `instance_type` (String, Optional) - Compute hardware spec.
+
+### `multicloud_streaming_cluster`
+Unified managed Apache Kafka event streaming cluster.
+- **AWS Target:** `aws_msk_cluster`
+- **GCP Target:** `google_managed_kafka_cluster`
+- **Azure Target:** `azurerm_eventhub_namespace`
+- **Attributes:**
+  - `cluster_name` (String, Required) - Streaming cluster name.
+  - `kafka_version` (String, Optional) - Kafka version.
+  - `node_count` (Int64, Optional) - Broker node count.
+
+### `multicloud_metric_alert`
+Unified metric threshold alarm rule.
+- **AWS Target:** `aws_cloudwatch_metric_alarm`
+- **GCP Target:** `google_monitoring_alert_policy`
+- **Azure Target:** `azurerm_monitor_metric_alert`
+- **Attributes:**
+  - `alert_name` (String, Required) - Alert rule name.
+  - `metric_name` (String, Optional) - Target metric.
+  - `threshold` (Float64, Optional) - Evaluation threshold.
+  - `comparison` (String, Optional) - Operator.
+
+### `multicloud_log_workspace`
+Unified centralized log analytics workspace.
+- **AWS Target:** `aws_cloudwatch_log_group`
+- **GCP Target:** `google_logging_project_sink`
+- **Azure Target:** `azurerm_log_analytics_workspace`
+- **Attributes:**
+  - `workspace_name` (String, Required) - Log workspace name.
+  - `retention_days` (Int64, Optional) - Log retention window in days.
+
+### `multicloud_graphql_api`
+Unified managed GraphQL API endpoint.
+- **AWS Target:** `aws_appsync_graphql_api`
+- **GCP Target:** `google_apigee_environment`
+- **Azure Target:** `azurerm_api_management_api`
+- **Attributes:**
+  - `api_name` (String, Required) - GraphQL API name.
+  - `authentication_type` (String, Optional) - Auth type.
+  - `schema_definition` (String, Optional) - GraphQL SDL schema string.
+

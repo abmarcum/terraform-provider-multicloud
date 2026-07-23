@@ -26,6 +26,7 @@ type StaticIPModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	Region       types.String `tfsdk:"region"`
 	AllocatedIP  types.String `tfsdk:"allocated_ip"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
 }
 
 func NewStaticIPResource() resource.Resource {
@@ -57,6 +58,10 @@ func (r *StaticIPResource) Schema(ctx context.Context, req resource.SchemaReques
 			},
 			"allocated_ip": schema.StringAttribute{
 				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -100,6 +105,11 @@ func (r *StaticIPResource) Update(ctx context.Context, req resource.UpdateReques
 }
 
 func (r *StaticIPResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state StaticIPModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *StaticIPResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

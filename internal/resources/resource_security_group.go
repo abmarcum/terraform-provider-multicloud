@@ -26,6 +26,8 @@ type SecurityGroupModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	NetworkID    types.String `tfsdk:"network_id"`
 	Description  types.String `tfsdk:"description"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewSecurityGroupResource() resource.Resource {
@@ -56,6 +58,14 @@ func (r *SecurityGroupResource) Schema(ctx context.Context, req resource.SchemaR
 			},
 			"description": schema.StringAttribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -98,6 +108,11 @@ func (r *SecurityGroupResource) Update(ctx context.Context, req resource.UpdateR
 }
 
 func (r *SecurityGroupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state SecurityGroupModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *SecurityGroupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

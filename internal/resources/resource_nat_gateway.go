@@ -26,6 +26,8 @@ type NATGatewayModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	SubnetID     types.String `tfsdk:"subnet_id"`
 	PublicIPID   types.String `tfsdk:"public_ip_id"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewNATGatewayResource() resource.Resource {
@@ -56,6 +58,14 @@ func (r *NATGatewayResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"public_ip_id": schema.StringAttribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -98,6 +108,11 @@ func (r *NATGatewayResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *NATGatewayResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state NATGatewayModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *NATGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

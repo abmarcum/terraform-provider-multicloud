@@ -42,6 +42,16 @@ func TestAllUnifiedResourcesMetadataAndSchema(t *testing.T) {
 		"multicloud_data_sync":           NewDataSyncResource,
 		"multicloud_identity_federation": NewIdentityFederationResource,
 		"multicloud_secret_rotator":      NewSecretRotatorResource,
+		"multicloud_container_app":       NewContainerAppResource,
+		"multicloud_bastion_host":        NewBastionHostResource,
+		"multicloud_waf_policy":          NewWAFPolicyResource,
+		"multicloud_vpc_peering":         NewVPCPeeringResource,
+		"multicloud_app_config":          NewAppConfigResource,
+		"multicloud_ai_endpoint":         NewAIEndpointResource,
+		"multicloud_streaming_cluster":   NewStreamingClusterResource,
+		"multicloud_metric_alert":        NewMetricAlertResource,
+		"multicloud_log_workspace":       NewLogWorkspaceResource,
+		"multicloud_graphql_api":         NewGraphQLAPIResource,
 	}
 
 	ctx := context.Background()

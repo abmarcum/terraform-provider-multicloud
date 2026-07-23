@@ -22,9 +22,13 @@ type LoadBalancerResource struct {
 
 type LoadBalancerModel struct {
 	ID           types.String `tfsdk:"id"`
-	LBName       types.String `tfsdk:"lb_name"`
+	BalancerName types.String `tfsdk:"balancer_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	Internal     types.Bool   `tfsdk:"internal"`
+	BalancerType types.String `tfsdk:"balancer_type"`
+	SubnetIDs    types.List   `tfsdk:"subnet_ids"`
+	Region       types.String `tfsdk:"region"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"`
 }
 
 func NewLoadBalancerResource() resource.Resource {
@@ -43,7 +47,7 @@ func (r *LoadBalancerResource) Schema(ctx context.Context, req resource.SchemaRe
 				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"lb_name": schema.StringAttribute{
+			"balancer_name": schema.StringAttribute{
 				Required: true,
 			},
 			"provider_type": schema.StringAttribute{
@@ -52,6 +56,21 @@ func (r *LoadBalancerResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"internal": schema.BoolAttribute{
 				Optional: true,
+			},
+			"balancer_type": schema.StringAttribute{
+				Optional: true,
+			},
+			"subnet_ids": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -71,7 +90,7 @@ func (r *LoadBalancerResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/lb/%s", providerType, plan.LBName.ValueString()))
+	plan.ID = types.StringValue(fmt.Sprintf("%s/lb/%s", providerType, plan.BalancerName.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -94,6 +113,11 @@ func (r *LoadBalancerResource) Update(ctx context.Context, req resource.UpdateRe
 }
 
 func (r *LoadBalancerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state LoadBalancerModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *LoadBalancerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

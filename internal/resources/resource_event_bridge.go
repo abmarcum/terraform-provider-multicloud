@@ -26,6 +26,7 @@ type EventBridgeModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	Region       types.String `tfsdk:"region"`
 	EventPattern types.String `tfsdk:"event_pattern"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
 }
 
 func NewEventBridgeResource() resource.Resource {
@@ -57,6 +58,10 @@ func (r *EventBridgeResource) Schema(ctx context.Context, req resource.SchemaReq
 			},
 			"event_pattern": schema.StringAttribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -99,6 +104,11 @@ func (r *EventBridgeResource) Update(ctx context.Context, req resource.UpdateReq
 }
 
 func (r *EventBridgeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state EventBridgeModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *EventBridgeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

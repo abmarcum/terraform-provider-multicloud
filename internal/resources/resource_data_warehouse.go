@@ -26,6 +26,8 @@ type DataWarehouseModel struct {
 	ProviderType  types.String `tfsdk:"provider_type"`
 	NodeType      types.String `tfsdk:"node_type"`
 	NumberOfNodes types.Int64  `tfsdk:"number_of_nodes"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewDataWarehouseResource() resource.Resource {
@@ -56,6 +58,14 @@ func (r *DataWarehouseResource) Schema(ctx context.Context, req resource.SchemaR
 			},
 			"number_of_nodes": schema.Int64Attribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -98,6 +108,11 @@ func (r *DataWarehouseResource) Update(ctx context.Context, req resource.UpdateR
 }
 
 func (r *DataWarehouseResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state DataWarehouseModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *DataWarehouseResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

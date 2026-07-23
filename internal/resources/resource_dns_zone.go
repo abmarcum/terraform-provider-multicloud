@@ -25,6 +25,9 @@ type DNSZoneModel struct {
 	ZoneName     types.String `tfsdk:"zone_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	IsPrivate    types.Bool   `tfsdk:"is_private"`
+	DomainName   types.String `tfsdk:"domain_name"`
+	Region       types.String `tfsdk:"region"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"`
 }
 
 func NewDNSZoneResource() resource.Resource {
@@ -52,6 +55,17 @@ func (r *DNSZoneResource) Schema(ctx context.Context, req resource.SchemaRequest
 			},
 			"is_private": schema.BoolAttribute{
 				Optional: true,
+			},
+			"domain_name": schema.StringAttribute{
+				Optional: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -94,6 +108,11 @@ func (r *DNSZoneResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 func (r *DNSZoneResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state DNSZoneModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *DNSZoneResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

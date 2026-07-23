@@ -27,6 +27,7 @@ type AutoScalingGroupModel struct {
 	MinSize      types.Int64  `tfsdk:"min_size"`
 	MaxSize      types.Int64  `tfsdk:"max_size"`
 	DesiredCap   types.Int64  `tfsdk:"desired_capacity"`
+	Region       types.String `tfsdk:"region"`
 	ExtraConfig  types.Map    `tfsdk:"extra_config"`
 }
 
@@ -61,6 +62,10 @@ func (r *AutoScalingGroupResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"desired_capacity": schema.Int64Attribute{
 				Optional: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 			"extra_config": schema.MapAttribute{
 				ElementType: types.StringType,
@@ -108,6 +113,11 @@ func (r *AutoScalingGroupResource) Update(ctx context.Context, req resource.Upda
 }
 
 func (r *AutoScalingGroupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state AutoScalingGroupModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *AutoScalingGroupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

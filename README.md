@@ -14,14 +14,14 @@ A custom Terraform Provider written in Go using HashiCorp's `terraform-plugin-fr
 
 Managing multi-cloud infrastructure traditionally requires writing and maintaining separate Terraform manifests for each cloud provider (`aws_s3_bucket`, `google_storage_bucket`, `azurerm_storage_container`). 
 
-`terraform-provider-multicloud` abstracts cloud-specific SDK primitives behind **33 unified resources** (`multicloud_*`). A single resource definition can deploy to AWS, GCP, or Azure by setting `provider_type = "aws" | "gcp" | "azure"`, while handling cross-cloud naming constraints, retries, security auditing, cost optimization, OPA Rego compliance, secret scanning, and failover policies automatically under the hood.
+`terraform-provider-multicloud` abstracts cloud-specific SDK primitives behind **43 unified resources** (`multicloud_*`). A single resource definition can deploy to AWS, GCP, or Azure by setting `provider_type = "aws" | "gcp" | "azure"`, while handling cross-cloud naming constraints, retries, security auditing, cost optimization, OPA Rego compliance, secret scanning, and failover policies automatically under the hood.
 
 ---
 
 ## Documentation Quick Links
 
 - [User Guide & Operations Runbook](docs/USER_GUIDE.md)
-- [Unified Resource Reference Manual (33 Resources)](docs/RESOURCES_REFERENCE.md)
+- [Unified Resource Reference Manual (43 Resources)](docs/RESOURCES_REFERENCE.md)
 - [Open-Source Contributor Guidelines](CONTRIBUTING.md)
 - [Terraform Registry Resource Docs Index](docs/resources/)
 
@@ -29,8 +29,8 @@ Managing multi-cloud infrastructure traditionally requires writing and maintaini
 
 ## Key Enterprise Features
 
-- **33 Unified Resources:** Standardized HCL schemas for storage, compute, networking, databases, security, containers, analytics, observability, IAM, DNS, messaging, data sync, workload identity, secret rotation, and failover management.
-- **Cloud-Specific Pass-Through (`extra_config`):** Optional escape-hatch map attribute across all 33 resources enabling engineers to pass provider-specific properties (`aws_s3_bucket_key_enabled`, `gcp_storage_class`, `azure_enable_ddos_protection`) directly to underlying cloud SDKs.
+- **43 Unified Resources:** Standardized HCL schemas for storage, compute, networking, databases, security, containers, analytics, observability, IAM, DNS, messaging, data sync, workload identity, secret rotation, and failover management.
+- **Cloud-Specific Pass-Through (`extra_config`):** Optional escape-hatch map attribute across all 43 resources enabling engineers to pass provider-specific properties (`aws_s3_bucket_key_enabled`, `gcp_storage_class`, `azure_enable_ddos_protection`) directly to underlying cloud SDKs.
 - **HCL & State Migration Converter (`tools/cmd/tf-migrate`):** Automated migration tool converting legacy AWS (`aws_*`), GCP (`google_*`), and Azure (`azurerm_*`) `.tf` files into unified `multicloud_*` HCL manifests, extracting `extra_config` properties and generating `terraform state mv` scripts to preserve active cloud state without infrastructure destruction.
 - **100% Test Suite Package Coverage:** Every package in the repository (`internal/cloud/*`, `internal/provider`, `internal/resources`, `tools/cmd/*`) contains unit test suites verified with `go test -v ./...`.
 - **Modularized Domain Subpackages (`internal/cloud/`):** Clean separation of concerns into domain subpackages:
@@ -124,7 +124,7 @@ graph TD
 
 ---
 
-## Complete Resource Mapping Matrix (33 Resources)
+## Complete Resource Mapping Matrix (43 Resources)
 
 | Category | Unified Resource (`multicloud_*`) | AWS Target (`hashicorp/aws`) | GCP Target (`hashicorp/google`) | Azure Target (`hashicorp/azurerm`) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -136,6 +136,7 @@ graph TD
 | **Compute** | [`multicloud_virtual_machine`](docs/resources/virtual_machine.md) | `aws_instance` | `google_compute_instance` | `azurerm_linux_virtual_machine` |
 | **Compute** | [`multicloud_auto_scaling_group`](docs/resources/auto_scaling_group.md)| `aws_autoscaling_group` | `google_compute_instance_group_manager` | `azurerm_linux_virtual_machine_scale_set` |
 | **Compute** | [`multicloud_serverless_function`](docs/resources/serverless_function.md)| `aws_lambda_function` | `google_cloudfunctions2_function` | `azurerm_linux_function_app` |
+| **Compute** | [`multicloud_container_app`](docs/resources/container_app.md)| `aws_apprunner_service` | `google_cloud_run_v2_service` | `azurerm_container_app` |
 | **Network** | [`multicloud_virtual_network`](docs/resources/virtual_network.md) | `aws_vpc` | `google_compute_network` | `azurerm_virtual_network` |
 | **Network** | [`multicloud_subnet`](docs/resources/subnet.md) | `aws_subnet` | `google_compute_subnetwork` | `azurerm_subnet` |
 | **Network** | [`multicloud_static_ip`](docs/resources/static_ip.md) | `aws_eip` | `google_compute_address` | `azurerm_public_ip` |
@@ -145,22 +146,31 @@ graph TD
 | **Network** | [`multicloud_api_gateway`](docs/resources/api_gateway.md) | `aws_apigatewayv2_api` | `google_api_gateway_gateway` | `azurerm_api_management` |
 | **Network** | [`multicloud_cdn_distribution`](docs/resources/cdn_distribution.md) | `aws_cloudfront_distribution` | `google_compute_backend_service` | `azurerm_cdn_endpoint` |
 | **Network** | [`multicloud_vpn_gateway`](docs/resources/vpn_gateway.md) | `aws_vpn_gateway` | `google_compute_vpn_gateway` | `azurerm_virtual_network_gateway` |
+| **Network** | [`multicloud_vpc_peering`](docs/resources/vpc_peering.md) | `aws_vpc_peering_connection` | `google_compute_network_peering` | `azurerm_virtual_network_peering` |
+| **Network** | [`multicloud_graphql_api`](docs/resources/graphql_api.md) | `aws_appsync_graphql_api` | `google_apigee_environment` | `azurerm_api_management_api` |
 | **Database** | [`multicloud_db_instance`](docs/resources/db_instance.md) | `aws_db_instance` | `google_sql_database_instance` | `azurerm_postgresql_server` |
 | **Database** | [`multicloud_nosql_table`](docs/resources/nosql_table.md) | `aws_dynamodb_table` | `google_firestore_database` | `azurerm_cosmosdb_account` |
 | **Database** | [`multicloud_cache_cluster`](docs/resources/cache_cluster.md) | `aws_elasticache_cluster` | `google_redis_instance` | `azurerm_redis_cache` |
 | **Analytics**| [`multicloud_data_warehouse`](docs/resources/data_warehouse.md) | `aws_redshift_cluster` | `google_bigquery_dataset` | `azurerm_synapse_workspace` |
 | **Analytics**| [`multicloud_search_index`](docs/resources/search_index.md) | `aws_opensearch_domain` | `google_discovery_engine_search_engine` | `azurerm_search_service` |
+| **Analytics**| [`multicloud_ai_endpoint`](docs/resources/ai_endpoint.md) | `aws_sagemaker_endpoint` | `google_vertex_ai_endpoint` | `azurerm_cognitive_account` |
 | **Container**| [`multicloud_kubernetes_cluster`](docs/resources/kubernetes_cluster.md)| `aws_eks_cluster` | `google_container_cluster` | `azurerm_kubernetes_cluster` |
 | **Container**| [`multicloud_container_registry`](docs/resources/container_registry.md)| `aws_ecr_repository` | `google_artifact_registry_repository` | `azurerm_container_registry` |
 | **Security** | [`multicloud_security_group`](docs/resources/security_group.md) | `aws_security_group` | `google_compute_firewall` | `azurerm_network_security_group` |
 | **Security** | [`multicloud_secret`](docs/resources/secret.md) | `aws_secretsmanager_secret` | `google_secret_manager_secret` | `azurerm_key_vault_secret` |
 | **Security** | [`multicloud_kms_key`](docs/resources/kms_key.md) | `aws_kms_key` | `google_kms_crypto_key` | `azurerm_key_vault_key` |
+| **Security** | [`multicloud_bastion_host`](docs/resources/bastion_host.md) | `aws_ec2_instance_connect_endpoint` | `google_iap_tunnel` | `azurerm_bastion_host` |
+| **Security** | [`multicloud_waf_policy`](docs/resources/waf_policy.md) | `aws_wafv2_web_acl` | `google_compute_security_policy` | `azurerm_web_application_firewall_policy` |
+| **Security** | [`multicloud_app_config`](docs/resources/app_config.md) | `aws_ssm_parameter` | `google_runtimeconfig_config` | `azurerm_app_configuration` |
 | **IAM** | [`multicloud_iam_role`](docs/resources/iam_role.md) | `aws_iam_role` | `google_service_account` | `azurerm_user_assigned_identity` |
 | **DNS** | [`multicloud_dns_zone`](docs/resources/dns_zone.md) | `aws_route53_zone` | `google_dns_managed_zone` | `azurerm_dns_zone` |
 | **Messaging**| [`multicloud_pubsub_topic`](docs/resources/pubsub_topic.md) | `aws_sns_topic` | `google_pubsub_topic` | `azurerm_servicebus_topic` |
 | **Messaging**| [`multicloud_message_queue`](docs/resources/message_queue.md) | `aws_sqs_queue` | `google_pubsub_subscription` | `azurerm_servicebus_queue` |
 | **Messaging**| [`multicloud_event_bridge`](docs/resources/event_bridge.md) | `aws_cloudwatch_event_bus` | `google_eventarc_trigger` | `azurerm_eventgrid_system_topic` |
+| **Messaging**| [`multicloud_streaming_cluster`](docs/resources/streaming_cluster.md)| `aws_msk_cluster` | `google_managed_kafka_cluster` | `azurerm_eventhub_namespace` |
 | **Observability**| [`multicloud_monitoring_dashboard`](docs/resources/monitoring_dashboard.md)| `aws_cloudwatch_dashboard` | `google_monitoring_dashboard` | `azurerm_portal_dashboard` |
+| **Observability**| [`multicloud_metric_alert`](docs/resources/metric_alert.md)| `aws_cloudwatch_metric_alarm` | `google_monitoring_alert_policy` | `azurerm_monitor_metric_alert` |
+| **Observability**| [`multicloud_log_workspace`](docs/resources/log_workspace.md)| `aws_cloudwatch_log_group` | `google_logging_project_sink` | `azurerm_log_analytics_workspace` |
 
 ---
 
@@ -171,7 +181,7 @@ terraform {
   required_providers {
     multicloud = {
       source  = "abmarcum/multicloud"
-      version = "1.0.0"
+      version = "0.1.0"
     }
   }
 }

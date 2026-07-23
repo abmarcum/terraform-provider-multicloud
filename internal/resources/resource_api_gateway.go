@@ -26,6 +26,7 @@ type APIGatewayModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	ProtocolType types.String `tfsdk:"protocol_type"`
 	APIEndpoint  types.String `tfsdk:"api_endpoint"`
+	Region       types.String `tfsdk:"region"`
 	ExtraConfig  types.Map    `tfsdk:"extra_config"`
 }
 
@@ -56,6 +57,10 @@ func (r *APIGatewayResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Optional: true,
 			},
 			"api_endpoint": schema.StringAttribute{
+				Computed: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
 			"extra_config": schema.MapAttribute{
@@ -106,6 +111,11 @@ func (r *APIGatewayResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *APIGatewayResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state APIGatewayModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *APIGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

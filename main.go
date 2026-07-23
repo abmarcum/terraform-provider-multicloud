@@ -11,7 +11,7 @@ import (
 
 var (
 	// Version of the provider, passed in via build flags
-	version string = "1.0.0"
+	version string = "0.1.0"
 )
 
 func main() {

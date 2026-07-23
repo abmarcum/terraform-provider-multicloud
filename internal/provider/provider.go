@@ -125,6 +125,16 @@ func (p *MulticloudProvider) Resources(ctx context.Context) []func() resource.Re
 		resources.NewDataSyncResource,
 		resources.NewIdentityFederationResource,
 		resources.NewSecretRotatorResource,
+		resources.NewContainerAppResource,
+		resources.NewBastionHostResource,
+		resources.NewWAFPolicyResource,
+		resources.NewVPCPeeringResource,
+		resources.NewAppConfigResource,
+		resources.NewAIEndpointResource,
+		resources.NewStreamingClusterResource,
+		resources.NewMetricAlertResource,
+		resources.NewLogWorkspaceResource,
+		resources.NewGraphQLAPIResource,
 	}
 }
 

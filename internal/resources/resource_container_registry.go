@@ -23,9 +23,12 @@ type ContainerRegistryResource struct {
 type ContainerRegistryModel struct {
 	ID             types.String `tfsdk:"id"`
 	RepositoryName types.String `tfsdk:"repository_name"`
+	RegistryName   types.String `tfsdk:"registry_name"`
 	ProviderType   types.String `tfsdk:"provider_type"`
 	ScanOnPush     types.Bool   `tfsdk:"scan_on_push"`
 	RepositoryURL  types.String `tfsdk:"repository_url"`
+	Region         types.String `tfsdk:"region"`
+	ExtraConfig    types.Map    `tfsdk:"extra_config"`
 }
 
 func NewContainerRegistryResource() resource.Resource {
@@ -45,7 +48,10 @@ func (r *ContainerRegistryResource) Schema(ctx context.Context, req resource.Sch
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"repository_name": schema.StringAttribute{
-				Required: true,
+				Optional: true,
+			},
+			"registry_name": schema.StringAttribute{
+				Optional: true,
 			},
 			"provider_type": schema.StringAttribute{
 				Required:      true,
@@ -56,6 +62,14 @@ func (r *ContainerRegistryResource) Schema(ctx context.Context, req resource.Sch
 			},
 			"repository_url": schema.StringAttribute{
 				Computed: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -76,6 +90,9 @@ func (r *ContainerRegistryResource) Create(ctx context.Context, req resource.Cre
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
 	repoName := plan.RepositoryName.ValueString()
+	if repoName == "" {
+		repoName = plan.RegistryName.ValueString()
+	}
 	plan.ID = types.StringValue(fmt.Sprintf("%s/cr/%s", providerType, repoName))
 	plan.RepositoryURL = types.StringValue(fmt.Sprintf("registry.%s.example.com/%s", providerType, repoName))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -100,6 +117,11 @@ func (r *ContainerRegistryResource) Update(ctx context.Context, req resource.Upd
 }
 
 func (r *ContainerRegistryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state ContainerRegistryModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *ContainerRegistryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

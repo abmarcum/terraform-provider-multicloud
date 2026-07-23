@@ -25,6 +25,8 @@ type SecretModel struct {
 	SecretName   types.String `tfsdk:"secret_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	SecretValue  types.String `tfsdk:"secret_value"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewSecretResource() resource.Resource {
@@ -53,6 +55,14 @@ func (r *SecretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"secret_value": schema.StringAttribute{
 				Required:  true,
 				Sensitive: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -95,6 +105,11 @@ func (r *SecretResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *SecretResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state SecretModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *SecretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

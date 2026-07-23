@@ -26,6 +26,8 @@ type KubernetesClusterModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	Version      types.String `tfsdk:"version"`
 	NodeCount    types.Int64  `tfsdk:"node_count"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewKubernetesClusterResource() resource.Resource {
@@ -56,6 +58,14 @@ func (r *KubernetesClusterResource) Schema(ctx context.Context, req resource.Sch
 			},
 			"node_count": schema.Int64Attribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -98,6 +108,11 @@ func (r *KubernetesClusterResource) Update(ctx context.Context, req resource.Upd
 }
 
 func (r *KubernetesClusterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state KubernetesClusterModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *KubernetesClusterResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

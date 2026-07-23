@@ -26,6 +26,8 @@ type KMSKeyModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	KeyUsage     types.String `tfsdk:"key_usage"`
 	KeyARNID     types.String `tfsdk:"key_arn_id"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewKMSKeyResource() resource.Resource {
@@ -55,6 +57,14 @@ func (r *KMSKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional: true,
 			},
 			"key_arn_id": schema.StringAttribute{
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
 		},
@@ -100,6 +110,11 @@ func (r *KMSKeyResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *KMSKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state KMSKeyModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *KMSKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

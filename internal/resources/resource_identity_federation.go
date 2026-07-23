@@ -27,6 +27,8 @@ type IdentityFederationModel struct {
 	SubjectCloud    types.String `tfsdk:"subject_cloud"`
 	Audience        types.String `tfsdk:"audience"`
 	TrustStatus     types.String `tfsdk:"trust_status"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewIdentityFederationResource() resource.Resource {
@@ -58,6 +60,14 @@ func (r *IdentityFederationResource) Schema(ctx context.Context, req resource.Sc
 				Optional: true,
 			},
 			"trust_status": schema.StringAttribute{
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
 		},
@@ -105,6 +115,11 @@ func (r *IdentityFederationResource) Update(ctx context.Context, req resource.Up
 }
 
 func (r *IdentityFederationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state IdentityFederationModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *IdentityFederationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

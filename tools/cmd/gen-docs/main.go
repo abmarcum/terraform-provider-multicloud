@@ -21,7 +21,7 @@ type ResourceMeta struct {
 
 func main() {
 	fmt.Println("======================================================================")
-	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (33 RESOURCES)")
+	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (43 RESOURCES)")
 	fmt.Println("======================================================================")
 
 	docsDir := "docs/resources"
@@ -865,6 +865,250 @@ func main() {
 
   extra_config = {
     "azure_dashboard_type" = "shared"
+  }
+}`,
+		},
+		{
+			Name:        "container_app",
+			Category:    "Compute",
+			Description: "Unified Serverless Container Application.",
+			AWS:         "aws_apprunner_service",
+			GCP:         "google_cloud_run_v2_service",
+			Azure:       "azurerm_container_app",
+			HowItWorks:  "The `multicloud_container_app` resource provisions serverless container workloads across AWS App Runner / ECS Fargate, GCP Cloud Run v2, and Azure Container Apps.",
+			Attributes:  []string{"`app_name` (String, Required) App service name.", "`image` (String, Optional) Container image URI.", "`cpu` (String, Optional) CPU spec.", "`memory` (String, Optional) Memory spec.", "`port` (Int64, Optional) Target port."},
+			BasicExample: `resource "multicloud_container_app" "basic" {
+  provider_type = "gcp"
+  app_name      = "api-service"
+  image         = "gcr.io/my-project/api:latest"
+}`,
+			AdvancedExample: `resource "multicloud_container_app" "aws_advanced" {
+  provider_type = "aws"
+  app_name      = "api-service-aws"
+  image         = "public.ecr.aws/my-org/api:v1"
+
+  extra_config = {
+    "aws_auto_scaling_min_size" = "2"
+  }
+}`,
+		},
+		{
+			Name:        "bastion_host",
+			Category:    "Security",
+			Description: "Unified Managed Bastion Jump Host.",
+			AWS:         "aws_ec2_instance_connect_endpoint",
+			GCP:         "google_iap_tunnel",
+			Azure:       "azurerm_bastion_host",
+			HowItWorks:  "The `multicloud_bastion_host` resource provisions managed SSH jump servers and identity-aware proxy endpoints across AWS EC2 Instance Connect, GCP IAP, and Azure Bastion.",
+			Attributes:  []string{"`host_name` (String, Required) Bastion host identifier.", "`vpc_id` (String, Optional) Parent VPC ID.", "`subnet_id` (String, Optional) Target Subnet ID."},
+			BasicExample: `resource "multicloud_bastion_host" "basic" {
+  provider_type = "aws"
+  host_name     = "prod-bastion"
+}`,
+			AdvancedExample: `resource "multicloud_bastion_host" "azure_advanced" {
+  provider_type = "azure"
+  host_name     = "azure-bastion"
+
+  extra_config = {
+    "azure_sku" = "Standard"
+  }
+}`,
+		},
+		{
+			Name:        "waf_policy",
+			Category:    "Security",
+			Description: "Unified Web Application Firewall Policy.",
+			AWS:         "aws_wafv2_web_acl",
+			GCP:         "google_compute_security_policy",
+			Azure:       "azurerm_web_application_firewall_policy",
+			HowItWorks:  "The `multicloud_waf_policy` resource provisions L7 Web Application Firewall rules and bot management across AWS WAFv2, GCP Cloud Armor, and Azure WAF.",
+			Attributes:  []string{"`policy_name` (String, Required) WAF policy name.", "`default_action` (String, Optional) 'allow' or 'block'."},
+			BasicExample: `resource "multicloud_waf_policy" "basic" {
+  provider_type  = "aws"
+  policy_name    = "app-waf-policy"
+  default_action = "allow"
+}`,
+			AdvancedExample: `resource "multicloud_waf_policy" "gcp_advanced" {
+  provider_type  = "gcp"
+  policy_name    = "cloud-armor-policy"
+  default_action = "allow"
+
+  extra_config = {
+    "gcp_adaptive_protection" = "enabled"
+  }
+}`,
+		},
+		{
+			Name:        "vpc_peering",
+			Category:    "Network",
+			Description: "Unified Virtual Private Network Peering Connection.",
+			AWS:         "aws_vpc_peering_connection",
+			GCP:         "google_compute_network_peering",
+			Azure:       "azurerm_virtual_network_peering",
+			HowItWorks:  "The `multicloud_vpc_peering` resource provisions non-transitive VPC and VNet peering connections across AWS VPC Peering, GCP Network Peering, and Azure VNet Peering.",
+			Attributes:  []string{"`peering_name` (String, Required) Peering connection name.", "`vpc_id` (String, Optional) Source VPC ID.", "`peer_vpc_id` (String, Optional) Destination VPC ID.", "`peer_region` (String, Optional) Destination VPC region."},
+			BasicExample: `resource "multicloud_vpc_peering" "basic" {
+  provider_type = "aws"
+  peering_name  = "vpc-peering-main"
+}`,
+			AdvancedExample: `resource "multicloud_vpc_peering" "azure_advanced" {
+  provider_type = "azure"
+  peering_name  = "vnet-peering-hub-spoke"
+
+  extra_config = {
+    "azure_allow_forwarded_traffic" = "true"
+  }
+}`,
+		},
+		{
+			Name:        "app_config",
+			Category:    "Security",
+			Description: "Unified Application Configuration Store.",
+			AWS:         "aws_ssm_parameter",
+			GCP:         "google_runtimeconfig_config",
+			Azure:       "azurerm_app_configuration",
+			HowItWorks:  "The `multicloud_app_config` resource provisions runtime key-value application configurations across AWS SSM Parameter Store, GCP Runtime Config, and Azure App Configuration.",
+			Attributes:  []string{"`config_name` (String, Required) Configuration name.", "`config_key` (String, Optional) Parameter key.", "`config_value` (String, Optional) Parameter value."},
+			BasicExample: `resource "multicloud_app_config" "basic" {
+  provider_type = "aws"
+  config_name   = "db-max-connections"
+  config_key    = "/app/db/max_connections"
+  config_value  = "100"
+}`,
+			AdvancedExample: `resource "multicloud_app_config" "gcp_advanced" {
+  provider_type = "gcp"
+  config_name   = "feature-flags"
+  config_key    = "enable_new_ui"
+  config_value  = "true"
+
+  extra_config = {
+    "gcp_label" = "prod"
+  }
+}`,
+		},
+		{
+			Name:        "ai_endpoint",
+			Category:    "Analytics",
+			Description: "Unified AI / Machine Learning Inference Endpoint.",
+			AWS:         "aws_sagemaker_endpoint",
+			GCP:         "google_vertex_ai_endpoint",
+			Azure:       "azurerm_cognitive_account",
+			HowItWorks:  "The `multicloud_ai_endpoint` resource provisions real-time inference model deployment endpoints across AWS SageMaker/Bedrock, GCP Vertex AI Endpoints, and Azure OpenAI Service.",
+			Attributes:  []string{"`endpoint_name` (String, Required) Inference endpoint name.", "`model_name` (String, Optional) Deployed model identifier.", "`instance_type` (String, Optional) Compute hardware tier."},
+			BasicExample: `resource "multicloud_ai_endpoint" "basic" {
+  provider_type = "gcp"
+  endpoint_name = "llama3-70b-endpoint"
+  model_name    = "meta/llama3-70b"
+}`,
+			AdvancedExample: `resource "multicloud_ai_endpoint" "aws_advanced" {
+  provider_type = "aws"
+  endpoint_name = "claude-endpoint-aws"
+  model_name    = "anthropic.claude-v2"
+
+  extra_config = {
+    "aws_instance_count" = "2"
+  }
+}`,
+		},
+		{
+			Name:        "streaming_cluster",
+			Category:    "Messaging",
+			Description: "Unified Managed Apache Kafka Streaming Cluster.",
+			AWS:         "aws_msk_cluster",
+			GCP:         "google_managed_kafka_cluster",
+			Azure:       "azurerm_eventhub_namespace",
+			HowItWorks:  "The `multicloud_streaming_cluster` resource provisions managed event streaming clusters across AWS MSK, GCP Managed Service for Apache Kafka, and Azure Event Hubs.",
+			Attributes:  []string{"`cluster_name` (String, Required) Streaming cluster name.", "`kafka_version` (String, Optional) Kafka engine version.", "`node_count` (Int64, Optional) Broker node count."},
+			BasicExample: `resource "multicloud_streaming_cluster" "basic" {
+  provider_type = "aws"
+  cluster_name  = "events-kafka"
+  kafka_version = "3.5.1"
+  node_count    = 3
+}`,
+			AdvancedExample: `resource "multicloud_streaming_cluster" "gcp_advanced" {
+  provider_type = "gcp"
+  cluster_name  = "kafka-gcp-prod"
+  kafka_version = "3.4.0"
+  node_count    = 6
+
+  extra_config = {
+    "gcp_cpu_per_node" = "4"
+  }
+}`,
+		},
+		{
+			Name:        "metric_alert",
+			Category:    "Observability",
+			Description: "Unified Metric Threshold Alarm Rule.",
+			AWS:         "aws_cloudwatch_metric_alarm",
+			GCP:         "google_monitoring_alert_policy",
+			Azure:       "azurerm_monitor_metric_alert",
+			HowItWorks:  "The `multicloud_metric_alert` resource provisions metric evaluation rules and threshold alarms across AWS CloudWatch Alarms, GCP Monitoring Alert Policies, and Azure Metric Alerts.",
+			Attributes:  []string{"`alert_name` (String, Required) Alert rule name.", "`metric_name` (String, Optional) Target metric name.", "`threshold` (Float64, Optional) Trigger threshold.", "`comparison` (String, Optional) Comparison operator."},
+			BasicExample: `resource "multicloud_metric_alert" "basic" {
+  provider_type = "aws"
+  alert_name    = "high-cpu-alarm"
+  metric_name   = "CPUUtilization"
+  threshold     = 85.0
+  comparison    = "GreaterThanThreshold"
+}`,
+			AdvancedExample: `resource "multicloud_metric_alert" "azure_advanced" {
+  provider_type = "azure"
+  alert_name    = "memory-alert"
+  metric_name   = "Available Memory Bytes"
+  threshold     = 1000000000
+  comparison    = "LessThan"
+
+  extra_config = {
+    "azure_severity" = "1"
+  }
+}`,
+		},
+		{
+			Name:        "log_workspace",
+			Category:    "Observability",
+			Description: "Unified Log Analytics Workspace.",
+			AWS:         "aws_cloudwatch_log_group",
+			GCP:         "google_logging_project_sink",
+			Azure:       "azurerm_log_analytics_workspace",
+			HowItWorks:  "The `multicloud_log_workspace` resource provisions log aggregation workspaces and sinks across AWS CloudWatch Log Groups, GCP Logging Sinks, and Azure Log Analytics Workspaces.",
+			Attributes:  []string{"`workspace_name` (String, Required) Workspace name.", "`retention_days` (Int64, Optional) Retention period in days."},
+			BasicExample: `resource "multicloud_log_workspace" "basic" {
+  provider_type  = "aws"
+  workspace_name = "app-logs"
+  retention_days = 30
+}`,
+			AdvancedExample: `resource "multicloud_log_workspace" "gcp_advanced" {
+  provider_type  = "gcp"
+  workspace_name = "gcp-audit-sink"
+  retention_days = 365
+
+  extra_config = {
+    "gcp_unique_writer_identity" = "true"
+  }
+}`,
+		},
+		{
+			Name:        "graphql_api",
+			Category:    "Network",
+			Description: "Unified Managed GraphQL API Endpoint.",
+			AWS:         "aws_appsync_graphql_api",
+			GCP:         "google_apigee_environment",
+			Azure:       "azurerm_api_management_api",
+			HowItWorks:  "The `multicloud_graphql_api` resource provisions managed GraphQL gateways across AWS AppSync, GCP Apigee/Data Connect, and Azure API Management GraphQL APIs.",
+			Attributes:  []string{"`api_name` (String, Required) GraphQL API name.", "`authentication_type` (String, Optional) Auth provider type.", "`schema_definition` (String, Optional) GraphQL SDL schema string."},
+			BasicExample: `resource "multicloud_graphql_api" "basic" {
+  provider_type       = "aws"
+  api_name            = "product-catalog-api"
+  authentication_type = "API_KEY"
+}`,
+			AdvancedExample: `resource "multicloud_graphql_api" "azure_advanced" {
+  provider_type       = "azure"
+  api_name            = "graphql-apim"
+  authentication_type = "OIDC"
+
+  extra_config = {
+    "azure_path" = "graphql"
   }
 }`,
 		},

@@ -27,6 +27,7 @@ type SubnetModel struct {
 	NetworkID    types.String `tfsdk:"network_id"`
 	CIDRBlock    types.String `tfsdk:"cidr_block"`
 	Region       types.String `tfsdk:"region"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
 }
 
 func NewSubnetResource() resource.Resource {
@@ -61,6 +62,10 @@ func (r *SubnetResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"region": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -103,6 +108,11 @@ func (r *SubnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *SubnetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state SubnetModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *SubnetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

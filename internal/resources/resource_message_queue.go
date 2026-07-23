@@ -25,6 +25,8 @@ type MessageQueueModel struct {
 	QueueName                types.String `tfsdk:"queue_name"`
 	ProviderType             types.String `tfsdk:"provider_type"`
 	VisibilityTimeoutSeconds types.Int64  `tfsdk:"visibility_timeout_seconds"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewMessageQueueResource() resource.Resource {
@@ -52,6 +54,14 @@ func (r *MessageQueueResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"visibility_timeout_seconds": schema.Int64Attribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -94,6 +104,11 @@ func (r *MessageQueueResource) Update(ctx context.Context, req resource.UpdateRe
 }
 
 func (r *MessageQueueResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state MessageQueueModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *MessageQueueResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

@@ -27,6 +27,7 @@ type VirtualNetworkModel struct {
 	Region       types.String `tfsdk:"region"`
 	CIDRBlock    types.String `tfsdk:"cidr_block"`
 	Tags         types.Map    `tfsdk:"tags"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
 }
 
 func NewVirtualNetworkResource() resource.Resource {
@@ -60,6 +61,10 @@ func (r *VirtualNetworkResource) Schema(ctx context.Context, req resource.Schema
 				Required: true,
 			},
 			"tags": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"extra_config": schema.MapAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
 			},
@@ -104,6 +109,11 @@ func (r *VirtualNetworkResource) Update(ctx context.Context, req resource.Update
 }
 
 func (r *VirtualNetworkResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state VirtualNetworkModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *VirtualNetworkResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

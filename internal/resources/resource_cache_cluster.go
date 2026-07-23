@@ -27,6 +27,8 @@ type CacheClusterModel struct {
 	Engine       types.String `tfsdk:"engine"`
 	NodeType     types.String `tfsdk:"node_type"`
 	NumNodes     types.Int64  `tfsdk:"num_nodes"`
+	Region       types.String `tfsdk:"region"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"`
 }
 
 func NewCacheClusterResource() resource.Resource {
@@ -60,6 +62,14 @@ func (r *CacheClusterResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"num_nodes": schema.Int64Attribute{
 				Optional: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -102,6 +112,11 @@ func (r *CacheClusterResource) Update(ctx context.Context, req resource.UpdateRe
 }
 
 func (r *CacheClusterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state CacheClusterModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *CacheClusterResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

@@ -21,11 +21,16 @@ type ServerlessFunctionResource struct {
 }
 
 type ServerlessFunctionModel struct {
-	ID           types.String `tfsdk:"id"`
-	FunctionName types.String `tfsdk:"function_name"`
-	ProviderType types.String `tfsdk:"provider_type"`
-	Runtime      types.String `tfsdk:"runtime"`
-	Handler      types.String `tfsdk:"handler"`
+	ID                   types.String `tfsdk:"id"`
+	FunctionName         types.String `tfsdk:"function_name"`
+	ProviderType         types.String `tfsdk:"provider_type"`
+	Runtime              types.String `tfsdk:"runtime"`
+	Handler              types.String `tfsdk:"handler"`
+	MemorySizeMB         types.Int64  `tfsdk:"memory_size_mb"`
+	TimeoutSeconds       types.Int64  `tfsdk:"timeout_seconds"`
+	Region               types.String `tfsdk:"region"`
+	ExtraConfig          types.Map    `tfsdk:"extra_config"`
+	EnvironmentVariables types.Map    `tfsdk:"environment_variables"`
 }
 
 func NewServerlessFunctionResource() resource.Resource {
@@ -56,6 +61,24 @@ func (r *ServerlessFunctionResource) Schema(ctx context.Context, req resource.Sc
 			},
 			"handler": schema.StringAttribute{
 				Optional: true,
+			},
+			"memory_size_mb": schema.Int64Attribute{
+				Optional: true,
+			},
+			"timeout_seconds": schema.Int64Attribute{
+				Optional: true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"environment_variables": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 		},
 	}
@@ -98,6 +121,11 @@ func (r *ServerlessFunctionResource) Update(ctx context.Context, req resource.Up
 }
 
 func (r *ServerlessFunctionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state ServerlessFunctionModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *ServerlessFunctionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

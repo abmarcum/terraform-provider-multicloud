@@ -25,6 +25,8 @@ type NoSQLTableModel struct {
 	TableName    types.String `tfsdk:"table_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	PartitionKey types.String `tfsdk:"partition_key"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewNoSQLTableResource() resource.Resource {
@@ -52,6 +54,14 @@ func (r *NoSQLTableResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"partition_key": schema.StringAttribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -94,6 +104,11 @@ func (r *NoSQLTableResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *NoSQLTableResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state NoSQLTableModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *NoSQLTableResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

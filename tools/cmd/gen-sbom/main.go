@@ -24,7 +24,7 @@ func main() {
   "packages": [
     {
       "name": "github.com/abmarcum/multi-cloud-provider",
-      "versionInfo": "v1.0.0",
+      "versionInfo": "v0.1.0",
       "downloadLocation": "https://github.com/abmarcum/multi-cloud-provider",
       "licenseConcluded": "MIT"
     },

@@ -25,6 +25,8 @@ type MonitoringDashboardModel struct {
 	DashboardName types.String `tfsdk:"dashboard_name"`
 	ProviderType  types.String `tfsdk:"provider_type"`
 	DashboardBody types.String `tfsdk:"dashboard_body"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewMonitoringDashboardResource() resource.Resource {
@@ -52,6 +54,14 @@ func (r *MonitoringDashboardResource) Schema(ctx context.Context, req resource.S
 			},
 			"dashboard_body": schema.StringAttribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -94,6 +104,11 @@ func (r *MonitoringDashboardResource) Update(ctx context.Context, req resource.U
 }
 
 func (r *MonitoringDashboardResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state MonitoringDashboardModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *MonitoringDashboardResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

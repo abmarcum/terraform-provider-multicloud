@@ -13,18 +13,23 @@ var (
 
 // SanitizeResourceName applies cloud-specific naming constraints to raw resource names
 func SanitizeResourceName(rawName string, providerType string, resourceType string) string {
-	if rawName == "" {
+	name := strings.TrimSpace(rawName)
+	if name == "" {
 		return "multicloud-resource"
 	}
 
 	p := strings.ToLower(providerType)
-	name := strings.TrimSpace(rawName)
 
 	// Hardened Path Traversal Protection: Strip parent directory references
 	name = strings.ReplaceAll(name, "../", "")
 	name = strings.ReplaceAll(name, "..\\", "")
 	name = strings.ReplaceAll(name, "/", "")
 	name = strings.ReplaceAll(name, "\\", "")
+	name = strings.TrimSpace(name)
+
+	if name == "" {
+		return "multicloud-resource"
+	}
 
 	switch p {
 	case "azure":

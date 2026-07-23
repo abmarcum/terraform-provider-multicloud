@@ -26,6 +26,8 @@ type IAMRoleModel struct {
 	ProviderType     types.String `tfsdk:"provider_type"`
 	Description      types.String `tfsdk:"description"`
 	AssumeRolePolicy types.String `tfsdk:"assume_role_policy"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewIAMRoleResource() resource.Resource {
@@ -56,6 +58,14 @@ func (r *IAMRoleResource) Schema(ctx context.Context, req resource.SchemaRequest
 			},
 			"assume_role_policy": schema.StringAttribute{
 				Optional: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -98,6 +108,11 @@ func (r *IAMRoleResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 func (r *IAMRoleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state IAMRoleModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *IAMRoleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

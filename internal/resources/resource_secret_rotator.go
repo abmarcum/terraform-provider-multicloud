@@ -27,6 +27,8 @@ type SecretRotatorModel struct {
 	SecretID             types.String `tfsdk:"secret_id"`
 	RotationIntervalDays types.Int64  `tfsdk:"rotation_interval_days"`
 	RotationStatus       types.String `tfsdk:"rotation_status"`
+	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	Region       types.String `tfsdk:"region"` 
 }
 
 func NewSecretRotatorResource() resource.Resource {
@@ -59,6 +61,14 @@ func (r *SecretRotatorResource) Schema(ctx context.Context, req resource.SchemaR
 				Optional: true,
 			},
 			"rotation_status": schema.StringAttribute{
+				Computed: true,
+			},
+			"extra_config": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+			},
+			"region": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 			},
 		},
@@ -105,6 +115,11 @@ func (r *SecretRotatorResource) Update(ctx context.Context, req resource.UpdateR
 }
 
 func (r *SecretRotatorResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state SecretRotatorModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 }
 
 func (r *SecretRotatorResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
