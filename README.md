@@ -5,8 +5,9 @@
 [![Tests Status](https://img.shields.io/badge/Tests-100%25%20PASSING-brightgreen.svg)](#building-and-testing)
 [![Cloud Support](https://img.shields.io/badge/Clouds-AWS%20|%20GCP%20|%20Azure-orange.svg)](#complete-resource-mapping-matrix)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![AI Generated](https://img.shields.io/badge/Google-Gemini-yellow.svg)
 
-A custom Terraform Provider written in Go using HashiCorp's `terraform-plugin-framework` that allows platform engineering teams to provision and manage cloud infrastructure across **AWS**, **GCP**, and **Azure** using a **single, unified set of HCL resource definitions**.
+A custom Terraform Provider written by Gemini 3.6 Flash in Go using HashiCorp's `terraform-plugin-framework` that allows platform engineering teams to provision and manage cloud infrastructure across **AWS**, **GCP**, and **Azure** using a **single, unified set of HCL resource definitions**.
 
 ---
 
