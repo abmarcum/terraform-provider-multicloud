@@ -151,6 +151,13 @@ func getAWSReadEndpoint(region string, resType string, name string) (string, str
 
 func (a *AWSAdapter) CreateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	region := common.GetRegion(req.Region, "us-east-1")
+	if common.IsMockMode() {
+		return common.ResourceResponse{
+			ID:     fmt.Sprintf("aws/%s/%s/%s", req.ResourceType, region, req.ResourceName),
+			Status: "ACTIVE",
+		}, nil
+	}
+
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err == nil && req.ResourceType == "storage_bucket" {
 		s3Client := s3.NewFromConfig(cfg)
@@ -162,29 +169,40 @@ func (a *AWSAdapter) CreateResource(ctx context.Context, req common.ResourceRequ
 				ID:     fmt.Sprintf("arn:aws:s3:::%s", req.ResourceName),
 				Status: "ACTIVE",
 			}, nil
+		} else {
+			return common.ResourceResponse{}, fmt.Errorf("AWS S3 CreateBucket API error: %w", err)
 		}
 	}
 
 	apiEndpoint, method, payload := getAWSServiceEndpoint(region, req.ResourceType, req.ResourceName)
 	if apiEndpoint != "" {
 		httpReq, err := http.NewRequestWithContext(ctx, method, apiEndpoint, bytes.NewBuffer(payload))
-		if err == nil {
-			httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			resp, err := common.HTTPClient.Do(httpReq)
-			if err == nil {
-				defer resp.Body.Close()
-			}
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("failed to create AWS HTTP request: %w", err)
+		}
+		httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := common.HTTPClient.Do(httpReq)
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("AWS live API call error: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return common.ResourceResponse{}, fmt.Errorf("AWS live API error (status %d) for %s", resp.StatusCode, req.ResourceName)
 		}
 	}
 
 	return common.ResourceResponse{
-		ID:     fmt.Sprintf("aws/%s/%s/%s", req.ResourceType, region, req.ResourceName),
+		ID:     fmt.Sprintf("arn:aws:%s:%s:%s:%s", req.ResourceType, region, getAWSAccountID(), req.ResourceName),
 		Status: "ACTIVE",
 	}, nil
 }
 
 func (a *AWSAdapter) ReadResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	region := common.GetRegion(req.Region, "us-east-1")
+	if common.IsMockMode() {
+		return common.ResourceResponse{ID: req.ResourceName, Status: "ACTIVE"}, nil
+	}
+
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err == nil && req.ResourceType == "storage_bucket" {
 		s3Client := s3.NewFromConfig(cfg)
@@ -199,14 +217,16 @@ func (a *AWSAdapter) ReadResource(ctx context.Context, req common.ResourceReques
 	apiEndpoint, method := getAWSReadEndpoint(region, req.ResourceType, req.ResourceName)
 	if apiEndpoint != "" {
 		httpReq, err := http.NewRequestWithContext(ctx, method, apiEndpoint, nil)
-		if err == nil {
-			resp, err := common.HTTPClient.Do(httpReq)
-			if err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == 404 {
-					return common.ResourceResponse{}, fmt.Errorf("AWS resource %s (%s) not found", req.ResourceName, req.ResourceType)
-				}
-			}
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("failed to create AWS Read HTTP request: %w", err)
+		}
+		resp, err := common.HTTPClient.Do(httpReq)
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("AWS live Read API call error: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return common.ResourceResponse{}, fmt.Errorf("AWS live API error (status %d) reading %s", resp.StatusCode, req.ResourceName)
 		}
 	}
 

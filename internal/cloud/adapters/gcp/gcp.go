@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/common"
@@ -342,36 +341,43 @@ func (a *GCPAdapter) getGCPDeleteEndpoint(project string, region string, resType
 func (a *GCPAdapter) CreateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	project, _ := common.GetGCPProject(req)
 	region := common.GetRegion(req.Region, "us-central1")
+	if common.IsMockMode() {
+		return common.ResourceResponse{
+			ID:     fmt.Sprintf("gcp/%s/%s/%s", req.ResourceType, region, req.ResourceName),
+			Status: "RUNNING",
+		}, nil
+	}
 
 	ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
-	if err == nil {
-		token, err := ts.Token()
-		if err == nil && token.AccessToken != "" {
-			apiEndpoint, method, payload := a.getGCPEndpoint(project, region, req.ResourceType, req.ResourceName, req.Attributes)
-			if apiEndpoint != "" {
-				httpReq, err := http.NewRequestWithContext(ctx, method, apiEndpoint, bytes.NewBuffer(payload))
-				if err != nil {
-					return common.ResourceResponse{}, fmt.Errorf("failed to create HTTP request: %w", err)
-				}
-				httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
-				httpReq.Header.Set("Content-Type", "application/json")
-				resp, err := common.HTTPClient.Do(httpReq)
-				if err != nil {
-					return common.ResourceResponse{}, fmt.Errorf("GCP API request failed: %w", err)
-				}
-				defer resp.Body.Close()
-				if resp.StatusCode >= 400 {
-					bodyBytes, _ := io.ReadAll(resp.Body)
-					if os.Getenv("TF_ACC") != "" || os.Getenv("STRICT_CLOUD_ERRORS") != "" {
-						return common.ResourceResponse{}, fmt.Errorf("GCP API error (status %d): %s", resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
-					}
-				}
-			}
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("GCP authentication error (DefaultTokenSource): %w", err)
+	}
+	token, err := ts.Token()
+	if err != nil || token.AccessToken == "" {
+		return common.ResourceResponse{}, fmt.Errorf("failed to obtain GCP access token: %w", err)
+	}
+
+	apiEndpoint, method, payload := a.getGCPEndpoint(project, region, req.ResourceType, req.ResourceName, req.Attributes)
+	if apiEndpoint != "" {
+		httpReq, err := http.NewRequestWithContext(ctx, method, apiEndpoint, bytes.NewBuffer(payload))
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("failed to create GCP HTTP request: %w", err)
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		httpReq.Header.Set("Content-Type", "application/json")
+		resp, err := common.HTTPClient.Do(httpReq)
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("GCP API request failed: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			return common.ResourceResponse{}, fmt.Errorf("GCP API error (status %d): %s", resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
 		}
 	}
 
 	return common.ResourceResponse{
-		ID:     fmt.Sprintf("gcp/%s/%s/%s", req.ResourceType, region, req.ResourceName),
+		ID:     fmt.Sprintf("projects/%s/regions/%s/%s/%s", project, region, req.ResourceType, req.ResourceName),
 		Status: "RUNNING",
 	}, nil
 }
@@ -379,25 +385,34 @@ func (a *GCPAdapter) CreateResource(ctx context.Context, req common.ResourceRequ
 func (a *GCPAdapter) ReadResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	project, _ := common.GetGCPProject(req)
 	region := common.GetRegion(req.Region, "us-central1")
+	if common.IsMockMode() {
+		return common.ResourceResponse{ID: req.ResourceName, Status: "RUNNING"}, nil
+	}
 
 	ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
-	if err == nil {
-		token, err := ts.Token()
-		if err == nil && token.AccessToken != "" {
-			apiEndpoint := a.getGCPDeleteEndpoint(project, region, req.ResourceType, req.ResourceName)
-			if apiEndpoint != "" {
-				httpReq, err := http.NewRequestWithContext(ctx, "GET", apiEndpoint, nil)
-				if err == nil {
-					httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
-					resp, err := common.HTTPClient.Do(httpReq)
-					if err == nil {
-						defer resp.Body.Close()
-						if resp.StatusCode == 404 {
-							return common.ResourceResponse{}, fmt.Errorf("GCP resource %s (%s) not found", req.ResourceName, req.ResourceType)
-						}
-					}
-				}
-			}
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("GCP authentication error (DefaultTokenSource): %w", err)
+	}
+	token, err := ts.Token()
+	if err != nil || token.AccessToken == "" {
+		return common.ResourceResponse{}, fmt.Errorf("failed to obtain GCP access token: %w", err)
+	}
+
+	apiEndpoint := a.getGCPDeleteEndpoint(project, region, req.ResourceType, req.ResourceName)
+	if apiEndpoint != "" {
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", apiEndpoint, nil)
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("failed to create GCP Read HTTP request: %w", err)
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		resp, err := common.HTTPClient.Do(httpReq)
+		if err != nil {
+			return common.ResourceResponse{}, fmt.Errorf("GCP Read API request failed: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			return common.ResourceResponse{}, fmt.Errorf("GCP resource %s (%s) read error (status %d): %s", req.ResourceName, req.ResourceType, resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
 		}
 	}
 

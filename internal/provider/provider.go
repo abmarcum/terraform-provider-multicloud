@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"os"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/resources"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -63,6 +64,10 @@ func (p *MulticloudProvider) Schema(ctx context.Context, req provider.SchemaRequ
 			},
 		},
 		Attributes: map[string]schema.Attribute{
+			"mock_mode": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Enable offline synthetic mock mode (Default: false).",
+			},
 			"default_tags": schema.MapAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
@@ -78,6 +83,10 @@ func (p *MulticloudProvider) Configure(ctx context.Context, req provider.Configu
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if !data.MockMode.IsNull() && !data.MockMode.IsUnknown() && data.MockMode.ValueBool() {
+		_ = os.Setenv("MULTICLOUD_MOCK_MODE", "true")
 	}
 
 	clientManager, err := NewClientManager(ctx, data)

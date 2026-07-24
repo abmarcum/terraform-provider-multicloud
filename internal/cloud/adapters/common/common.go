@@ -58,3 +58,7 @@ func SanitizeErrorBody(body []byte) string {
 	}
 	return str
 }
+
+func IsMockMode() bool {
+	return os.Getenv("MULTICLOUD_MOCK_MODE") == "true"
+}

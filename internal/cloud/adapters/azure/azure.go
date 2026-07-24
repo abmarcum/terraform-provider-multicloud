@@ -70,6 +70,18 @@ func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRe
 	resourceGroup := "multicloud-rg"
 	region := common.GetRegion(req.Region, "eastus")
 
+	if common.IsMockMode() {
+		return common.ResourceResponse{
+			ID:     fmt.Sprintf("azure/%s/%s/%s", subscriptionID, resourceGroup, req.ResourceName),
+			Status: "SUCCEEDED",
+		}, nil
+	}
+
+	token := os.Getenv("AZURE_BEARER_TOKEN")
+	if token == "" {
+		return common.ResourceResponse{}, fmt.Errorf("Azure authentication error: AZURE_BEARER_TOKEN is not set")
+	}
+
 	azType, apiVer := getAzureResourceType(req.ResourceType)
 	armEndpoint := fmt.Sprintf("https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Resources/deployments/%s?api-version=2021-04-01",
 		subscriptionID, url.PathEscape(resourceGroup), url.PathEscape(req.ResourceName))
@@ -94,21 +106,23 @@ func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRe
 	}
 	payload, _ := json.Marshal(armPayload)
 
-	token := os.Getenv("AZURE_BEARER_TOKEN")
-	if token != "" {
-		httpReq, err := http.NewRequestWithContext(ctx, "PUT", armEndpoint, bytes.NewBuffer(payload))
-		if err == nil {
-			httpReq.Header.Set("Authorization", "Bearer "+token)
-			httpReq.Header.Set("Content-Type", "application/json")
-			resp, err := common.HTTPClient.Do(httpReq)
-			if err == nil {
-				defer resp.Body.Close()
-			}
-		}
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", armEndpoint, bytes.NewBuffer(payload))
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("failed to create Azure HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := common.HTTPClient.Do(httpReq)
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("Azure ARM API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return common.ResourceResponse{}, fmt.Errorf("Azure ARM API error (status %d) for %s", resp.StatusCode, req.ResourceName)
 	}
 
 	return common.ResourceResponse{
-		ID:     fmt.Sprintf("azure/%s/%s/%s", subscriptionID, resourceGroup, req.ResourceName),
+		ID:     fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s/%s", subscriptionID, resourceGroup, azType, req.ResourceName),
 		Status: "SUCCEEDED",
 	}, nil
 }
@@ -117,20 +131,28 @@ func (a *AzureAdapter) ReadResource(ctx context.Context, req common.ResourceRequ
 	subscriptionID := getAzureSubscriptionID()
 	resourceGroup := "multicloud-rg"
 
-	armEndpoint := getAzureResourceURI(subscriptionID, resourceGroup, req.ResourceType, req.ResourceName)
+	if common.IsMockMode() {
+		return common.ResourceResponse{ID: req.ResourceName, Status: "SUCCEEDED"}, nil
+	}
+
 	token := os.Getenv("AZURE_BEARER_TOKEN")
-	if token != "" {
-		httpReq, err := http.NewRequestWithContext(ctx, "GET", armEndpoint, nil)
-		if err == nil {
-			httpReq.Header.Set("Authorization", "Bearer "+token)
-			resp, err := common.HTTPClient.Do(httpReq)
-			if err == nil {
-				defer resp.Body.Close()
-				if resp.StatusCode == 404 {
-					return common.ResourceResponse{}, fmt.Errorf("Azure resource %s not found", req.ResourceName)
-				}
-			}
-		}
+	if token == "" {
+		return common.ResourceResponse{}, fmt.Errorf("Azure authentication error: AZURE_BEARER_TOKEN is not set")
+	}
+
+	armEndpoint := getAzureResourceURI(subscriptionID, resourceGroup, req.ResourceType, req.ResourceName)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", armEndpoint, nil)
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("failed to create Azure Read HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	resp, err := common.HTTPClient.Do(httpReq)
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("Azure Read API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return common.ResourceResponse{}, fmt.Errorf("Azure resource %s read error (status %d)", req.ResourceName, resp.StatusCode)
 	}
 	return common.ResourceResponse{ID: req.ResourceName, Status: "SUCCEEDED"}, nil
 }

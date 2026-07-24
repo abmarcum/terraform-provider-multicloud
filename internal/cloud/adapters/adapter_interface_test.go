@@ -14,24 +14,31 @@ func TestCloudAdapters(t *testing.T) {
 		Region:       "us-west-2",
 	}
 
-	// 1. AWS Adapter
+	// 1. Test Mock Mode (MULTICLOUD_MOCK_MODE=true)
+	t.Setenv("MULTICLOUD_MOCK_MODE", "true")
+
 	aws := &AWSAdapter{}
 	resp, err := aws.CreateResource(ctx, req)
 	if err != nil || resp.Status != "ACTIVE" {
-		t.Errorf("expected AWS adapter create to return ACTIVE status")
+		t.Errorf("expected AWS adapter create in mock mode to return ACTIVE status")
 	}
 
-	// 2. GCP Adapter
 	gcp := &GCPAdapter{}
 	resp, err = gcp.CreateResource(ctx, req)
 	if err != nil || resp.Status != "RUNNING" {
-		t.Errorf("expected GCP adapter create to return RUNNING status")
+		t.Errorf("expected GCP adapter create in mock mode to return RUNNING status")
 	}
 
-	// 3. Azure Adapter
 	azure := &AzureAdapter{}
 	resp, err = azure.CreateResource(ctx, req)
 	if err != nil || resp.Status != "SUCCEEDED" {
-		t.Errorf("expected Azure adapter create to return SUCCEEDED status")
+		t.Errorf("expected Azure adapter create in mock mode to return SUCCEEDED status")
+	}
+
+	// 2. Test Live Mode (MULTICLOUD_MOCK_MODE="") - should return live cloud authentication error when uncredentialed
+	t.Setenv("MULTICLOUD_MOCK_MODE", "")
+	_, err = azure.CreateResource(ctx, req)
+	if err == nil {
+		t.Errorf("expected Azure adapter create in live mode without credentials to return authentication error")
 	}
 }

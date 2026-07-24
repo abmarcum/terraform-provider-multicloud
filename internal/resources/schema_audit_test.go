@@ -8,6 +8,7 @@ import (
 )
 
 func TestAllResourcesHaveExtraConfigAndRegion(t *testing.T) {
+	t.Setenv("MULTICLOUD_MOCK_MODE", "true")
 	resourceFactories := map[string]func() resource.Resource{
 		"multicloud_storage_bucket":      NewStorageBucketResource,
 		"multicloud_virtual_machine":     NewVirtualMachineResource,

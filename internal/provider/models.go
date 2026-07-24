@@ -6,6 +6,7 @@ import (
 
 // ProviderModel maps the provider configuration schema
 type ProviderModel struct {
+	MockMode    types.Bool        `tfsdk:"mock_mode"`
 	AWS         *AWSConfigModel   `tfsdk:"aws"`
 	GCP         *GCPConfigModel   `tfsdk:"gcp"`
 	Azure       *AzureConfigModel `tfsdk:"azure"`
