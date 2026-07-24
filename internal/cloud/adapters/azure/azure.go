@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/common"
 )
@@ -65,6 +66,36 @@ func getAzureResourceURI(subID string, rg string, resType string, name string) s
 		escSubID, escRG, azType, escName, apiVer)
 }
 
+func getAzureVMHardwareSKU(sizeTier string, extraAttrs map[string]interface{}) string {
+	if extraAttrs != nil {
+		if sku, ok := extraAttrs["azure_vm_sku"].(string); ok && sku != "" {
+			return sku
+		}
+		if arch, ok := extraAttrs["azure_hardware_architecture"].(string); ok && strings.ToLower(arch) == "intel" {
+			switch strings.ToLower(sizeTier) {
+			case "large":
+				return "Standard_D8s_v5" // Intel Xeon Platinum 8370C (Ice Lake)
+			case "medium":
+				return "Standard_D4s_v5" // Intel Xeon Platinum 8370C (Ice Lake)
+			default:
+				return "Standard_D2s_v5" // Intel Xeon Platinum 8370C (Ice Lake)
+			}
+		}
+		if confidential, ok := extraAttrs["intel_sgx_confidential"].(string); ok && confidential == "true" {
+			return "Standard_DC2s_v3" // Intel SGX Confidential Compute with Intel Xeon E-2288G
+		}
+	}
+
+	switch strings.ToLower(sizeTier) {
+	case "large":
+		return "Standard_D8s_v5" // Intel Xeon Platinum 8370C
+	case "medium":
+		return "Standard_D4s_v5" // Intel Xeon Platinum 8370C
+	default:
+		return "Standard_D2s_v5" // Intel Xeon Platinum 8370C
+	}
+}
+
 func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	subscriptionID := getAzureSubscriptionID()
 	resourceGroup := "multicloud-rg"
@@ -86,6 +117,18 @@ func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRe
 	armEndpoint := fmt.Sprintf("https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Resources/deployments/%s?api-version=2021-04-01",
 		subscriptionID, url.PathEscape(resourceGroup), url.PathEscape(req.ResourceName))
 
+	sizeTier := "small"
+	if s, ok := req.Attributes["size_tier"].(string); ok && s != "" {
+		sizeTier = s
+	}
+	intelVmSku := getAzureVMHardwareSKU(sizeTier, req.Attributes)
+
+	vmProperties := map[string]interface{}{
+		"hardwareProfile": map[string]string{
+			"vmSize": intelVmSku, // Intel Xeon Platinum / SGX hardware SKU
+		},
+	}
+
 	armPayload := map[string]interface{}{
 		"properties": map[string]interface{}{
 			"mode": "Incremental",
@@ -98,7 +141,7 @@ func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRe
 						"apiVersion": apiVer,
 						"name":       req.ResourceName,
 						"location":   region,
-						"properties": map[string]interface{}{},
+						"properties": vmProperties,
 					},
 				},
 			},

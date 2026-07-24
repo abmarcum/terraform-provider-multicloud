@@ -26,6 +26,7 @@ type VirtualMachineModel struct {
 	ProviderType      types.String `tfsdk:"provider_type"`
 	Region            types.String `tfsdk:"region"`
 	SizeTier          types.String `tfsdk:"size_tier"`
+	InstanceType      types.String `tfsdk:"instance_type"`
 	ImageID           types.String `tfsdk:"image_id"`
 	SubnetID          types.String `tfsdk:"subnet_id"`
 	SSHPublicKey      types.String `tfsdk:"ssh_public_key"`
@@ -66,7 +67,11 @@ func (r *VirtualMachineResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"size_tier": schema.StringAttribute{
 				Optional:    true,
-				Description: "Standard instance tier: 'small', 'medium', 'large'.",
+				Description: "Standard instance tier: 'small', 'medium', 'large' (Defaults to Intel Xeon hardware).",
+			},
+			"instance_type": schema.StringAttribute{
+				Optional:    true,
+				Description: "Explicit cloud instance type/SKU specification (e.g., AWS 'm6i.xlarge', GCP 'n2-standard-4', Azure 'Standard_D4s_v5').",
 			},
 			"image_id": schema.StringAttribute{
 				Optional: true,
@@ -123,7 +128,20 @@ func (r *VirtualMachineResource) Create(ctx context.Context, req resource.Create
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "virtual_machine", plan.VMName.ValueString(), reg, nil)
+
+	extraAttrs := make(map[string]interface{})
+	if !plan.SizeTier.IsNull() && !plan.SizeTier.IsUnknown() {
+		extraAttrs["size_tier"] = plan.SizeTier.ValueString()
+	}
+	if !plan.InstanceType.IsNull() && !plan.InstanceType.IsUnknown() && plan.InstanceType.ValueString() != "" {
+		instType := plan.InstanceType.ValueString()
+		extraAttrs["instance_type"] = instType
+		extraAttrs["aws_instance_type"] = instType
+		extraAttrs["gcp_machine_type"] = instType
+		extraAttrs["azure_vm_sku"] = instType
+	}
+
+	res, err := adapters.CreateCloudResource(ctx, providerType, "virtual_machine", plan.VMName.ValueString(), reg, extraAttrs)
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return

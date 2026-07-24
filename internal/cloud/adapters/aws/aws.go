@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/common"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -23,6 +24,35 @@ func getAWSAccountID() string {
 		acc = "unknown-account"
 	}
 	return url.PathEscape(acc)
+}
+
+func getAWSIntelInstanceType(sizeTier string, extraAttrs map[string]interface{}) string {
+	if extraAttrs != nil {
+		if inst, ok := extraAttrs["instance_type"].(string); ok && inst != "" {
+			return inst
+		}
+		if inst, ok := extraAttrs["aws_instance_type"].(string); ok && inst != "" {
+			return inst
+		}
+		if arch, ok := extraAttrs["aws_hardware_architecture"].(string); ok && strings.ToLower(arch) == "intel" {
+			switch strings.ToLower(sizeTier) {
+			case "large":
+				return "m6i.xlarge" // 3rd Gen Intel Xeon Platinum 8375C (Ice Lake)
+			case "medium":
+				return "m6i.large"  // 3rd Gen Intel Xeon Platinum 8375C (Ice Lake)
+			default:
+				return "t3.medium"  // Intel Xeon Platinum
+			}
+		}
+	}
+	switch strings.ToLower(sizeTier) {
+	case "large":
+		return "m6i.xlarge" // Intel Xeon Platinum 8375C
+	case "medium":
+		return "m6i.large"  // Intel Xeon Platinum 8375C
+	default:
+		return "t3.medium"  // Intel Xeon
+	}
 }
 
 func getAWSServiceEndpoint(region string, resType string, name string) (string, string, []byte) {

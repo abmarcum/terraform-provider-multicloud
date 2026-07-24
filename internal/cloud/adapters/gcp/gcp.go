@@ -16,6 +16,35 @@ import (
 
 type GCPAdapter struct{}
 
+func getGCPIntelMachineType(sizeTier string, extraAttrs map[string]interface{}) string {
+	if extraAttrs != nil {
+		if machine, ok := extraAttrs["instance_type"].(string); ok && machine != "" {
+			return machine
+		}
+		if machine, ok := extraAttrs["gcp_machine_type"].(string); ok && machine != "" {
+			return machine
+		}
+		if arch, ok := extraAttrs["gcp_hardware_architecture"].(string); ok && strings.ToLower(arch) == "intel" {
+			switch strings.ToLower(sizeTier) {
+			case "large":
+				return "n2-standard-8" // 3rd Gen Intel Xeon Platinum 8373C (Ice Lake)
+			case "medium":
+				return "n2-standard-4" // 3rd Gen Intel Xeon Platinum 8373C (Ice Lake)
+			default:
+				return "n2-standard-2" // 3rd Gen Intel Xeon Platinum 8373C (Ice Lake)
+			}
+		}
+	}
+	switch strings.ToLower(sizeTier) {
+	case "large":
+		return "n2-standard-8" // Intel Xeon Ice Lake
+	case "medium":
+		return "n2-standard-4" // Intel Xeon Ice Lake
+	default:
+		return "n2-standard-2" // Intel Xeon Ice Lake
+	}
+}
+
 func (a *GCPAdapter) getGCPEndpoint(project string, region string, resType string, name string, attrs map[string]interface{}) (string, string, []byte) {
 	var endpoint string
 	var method = "POST"
