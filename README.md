@@ -31,6 +31,7 @@ Managing multi-cloud infrastructure traditionally requires writing and maintaini
 ## Key Enterprise Features
 
 - **55 Unified Resources:** Standardized HCL schemas for storage, compute, networking, databases, security, containers, analytics, observability, IAM, DNS, messaging, data sync, workload identity, secret rotation, and failover management.
+- **Production Live API Execution & Opt-In Mocking (`mock_mode`):** `terraform plan` and `terraform apply` execute live API calls against AWS, GCP, and Azure by default (`mock_mode = false`), returning authentic cloud diagnostics when credentials or calls fail. An explicit opt-in (`mock_mode = true` or `MULTICLOUD_MOCK_MODE=true`) allows offline dry-run testing and CI/CD simulation.
 - **Cloud-Specific Pass-Through (`extra_config`):** Optional escape-hatch map attribute across all 55 resources enabling engineers to pass provider-specific properties (`aws_s3_bucket_key_enabled`, `gcp_storage_class`, `azure_enable_ddos_protection`) directly to underlying cloud SDKs.
 - **HCL & State Migration Converter (`tools/cmd/tf-migrate`):** Automated migration tool converting legacy AWS (`aws_*`), GCP (`google_*`), and Azure (`azurerm_*`) `.tf` files into unified `multicloud_*` HCL manifests, extracting `extra_config` properties and generating `terraform state mv` scripts to preserve active cloud state without infrastructure destruction.
 - **100% Test Suite Package Coverage:** Every package in the repository (`internal/cloud/*`, `internal/provider`, `internal/resources`, `tools/cmd/*`) contains unit test suites verified with `go test -v ./...`.
@@ -246,6 +247,9 @@ terraform {
 }
 
 provider "multicloud" {
+  # Default: Live Cloud API Mode (set to true for offline CI/CD simulation)
+  mock_mode = false
+
   aws {
     region     = "us-west-2"
     access_key = var.aws_access_key

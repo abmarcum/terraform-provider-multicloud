@@ -47,6 +47,22 @@ provider "multicloud" {
 }
 ```
 
+### 1.4 Live Cloud API Execution vs Offline Mock Mode (`mock_mode`)
+By default, `mock_mode` is **disabled (`false`)**. `terraform plan` and `terraform apply` execute live API calls directly against AWS SDK, GCP REST, and Azure ARM endpoints. If credentials are empty or invalid, authentic cloud diagnostics will be returned.
+
+To enable offline simulation / CI/CD dry runs:
+
+```hcl
+provider "multicloud" {
+  mock_mode = true # Enables offline synthetic provisioning
+}
+```
+
+Or set the environment variable:
+```bash
+export MULTICLOUD_MOCK_MODE=true
+```
+
 ---
 
 ## 2. Core HCL Provisioning & Cloud-Specific Pass-Through (`extra_config`)
