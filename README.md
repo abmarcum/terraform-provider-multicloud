@@ -171,7 +171,7 @@ graph TD
 
 ---
 
-## Complete Resource Mapping Matrix (43 Resources)
+## Complete Resource Mapping Matrix (55 Resources)
 
 | Category | Unified Resource (`multicloud_*`) | AWS Target (`hashicorp/aws`) | GCP Target (`hashicorp/google`) | Azure Target (`hashicorp/azurerm`) |
 | :--- | :--- | :--- | :--- | :--- |
