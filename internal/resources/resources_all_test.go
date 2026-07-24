@@ -65,6 +65,11 @@ func TestAllUnifiedResourcesMetadataAndSchema(t *testing.T) {
 		"multicloud_data_pipeline":       NewDataPipelineResource,
 		"multicloud_feature_store":       NewFeatureStoreResource,
 		"multicloud_edge_function":       NewEdgeFunctionResource,
+		"multicloud_global_anycast_ip":   NewGlobalAnycastIPResource,
+		"multicloud_custom_machine_type": NewCustomMachineTypeResource,
+		"multicloud_storage_inventory_report": NewStorageInventoryReportResource,
+		"multicloud_workload_identity_pool": NewWorkloadIdentityPoolResource,
+		"multicloud_storage_transfer_job": NewStorageTransferJobResource,
 	}
 
 	ctx := context.Background()

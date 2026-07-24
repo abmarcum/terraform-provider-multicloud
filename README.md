@@ -15,14 +15,14 @@ A custom Terraform Provider written by Gemini 3.6 Flash in Go using HashiCorp's 
 
 Managing multi-cloud infrastructure traditionally requires writing and maintaining separate Terraform manifests for each cloud provider (`aws_s3_bucket`, `google_storage_bucket`, `azurerm_storage_container`). 
 
-`terraform-provider-multicloud` abstracts cloud-specific SDK primitives behind **55 unified resources** (`multicloud_*`). A single resource definition can deploy to AWS, GCP, or Azure by setting `provider_type = "aws" | "gcp" | "azure"`, while handling cross-cloud naming constraints, retries, security auditing, cost optimization, OPA Rego compliance, secret scanning, and failover policies automatically under the hood.
+`terraform-provider-multicloud` abstracts cloud-specific SDK primitives behind **60 unified resources** (`multicloud_*`). A single resource definition can deploy to AWS, GCP, or Azure by setting `provider_type = "aws" | "gcp" | "azure"`, while handling cross-cloud naming constraints, retries, security auditing, cost optimization, OPA Rego compliance, secret scanning, and failover policies automatically under the hood.
 
 ---
 
 ## Documentation Quick Links
 
 - [User Guide & Operations Runbook](docs/USER_GUIDE.md)
-- [Unified Resource Reference Manual (55 Resources)](docs/RESOURCES_REFERENCE.md)
+- [Unified Resource Reference Manual (60 Resources)](docs/RESOURCES_REFERENCE.md)
 - [Open-Source Contributor Guidelines](CONTRIBUTING.md)
 - [Terraform Registry Resource Docs Index](docs/resources/)
 
@@ -30,10 +30,10 @@ Managing multi-cloud infrastructure traditionally requires writing and maintaini
 
 ## Key Enterprise Features
 
-- **55 Unified Resources:** Standardized HCL schemas for storage, compute, networking, databases, security, containers, analytics, observability, IAM, DNS, messaging, data sync, workload identity, secret rotation, and failover management.
+- **60 Unified Resources:** Standardized HCL schemas for storage, compute, networking, databases, security, containers, analytics, observability, IAM, DNS, messaging, data sync, workload identity, secret rotation, and failover management.
 - **Intel Xeon Default Hardware & Explicit `instance_type` SKUs:** Compute resources default to Intel Xeon Platinum hardware (`m6i.*` on AWS, `n2-standard-*` on GCP, `Standard_D*s_v5` on Azure). Customers can either rely on abstract size tiers (`small`, `medium`, `large`) or specify exact cloud instance SKUs directly via `instance_type = "m6i.xlarge"`.
 - **Production Live API Execution & Opt-In Mocking (`mock_mode`):** `terraform plan` and `terraform apply` execute live API calls against AWS, GCP, and Azure by default (`mock_mode = false`), returning authentic cloud diagnostics when credentials or calls fail. An explicit opt-in (`mock_mode = true` or `MULTICLOUD_MOCK_MODE=true`) allows offline dry-run testing and CI/CD simulation.
-- **Cloud-Specific Pass-Through (`extra_config`):** Optional escape-hatch map attribute across all 55 resources enabling engineers to pass provider-specific properties (`aws_s3_bucket_key_enabled`, `gcp_storage_class`, `azure_enable_ddos_protection`) directly to underlying cloud SDKs.
+- **Cloud-Specific Pass-Through (`extra_config`):** Optional escape-hatch map attribute across all 60 resources enabling engineers to pass provider-specific properties (`aws_s3_bucket_key_enabled`, `gcp_storage_class`, `azure_enable_ddos_protection`) directly to underlying cloud SDKs.
 - **HCL & State Migration Converter (`tools/cmd/tf-migrate`):** Automated migration tool converting legacy AWS (`aws_*`), GCP (`google_*`), and Azure (`azurerm_*`) `.tf` files into unified `multicloud_*` HCL manifests, extracting `extra_config` properties and generating `terraform state mv` scripts to preserve active cloud state without infrastructure destruction.
 - **100% Test Suite Package Coverage:** Every package in the repository (`internal/cloud/*`, `internal/provider`, `internal/resources`, `tools/cmd/*`) contains unit test suites verified with `go test -v ./...`.
 - **Modularized Domain Subpackages (`internal/cloud/`):** Clean separation of concerns into domain subpackages:
@@ -173,7 +173,7 @@ graph TD
 
 ---
 
-## Complete Resource Mapping Matrix (55 Resources)
+## Complete Resource Mapping Matrix (60 Resources)
 
 | Category | Unified Resource (`multicloud_*`) | AWS Target (`hashicorp/aws`) | GCP Target (`hashicorp/google`) | Azure Target (`hashicorp/azurerm`) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -184,6 +184,7 @@ graph TD
 | **Analytics**| [`multicloud_search_index`](docs/resources/search_index.md) | `aws_opensearch_domain` | `google_discovery_engine_search_engine` | `azurerm_search_service` |
 | **Compute** | [`multicloud_auto_scaling_group`](docs/resources/auto_scaling_group.md)| `aws_autoscaling_group` | `google_compute_instance_group_manager` | `azurerm_linux_virtual_machine_scale_set` |
 | **Compute** | [`multicloud_container_app`](docs/resources/container_app.md)| `aws_apprunner_service` | `google_cloud_run_v2_service` | `azurerm_container_app` |
+| **Compute** | [`multicloud_custom_machine_type`](docs/resources/custom_machine_type.md)| `aws_launch_template` | `google_compute_instance` | `azurerm_linux_virtual_machine` |
 | **Compute** | [`multicloud_edge_function`](docs/resources/edge_function.md) | `aws_cloudfront_function` | `google_cloudfunctions_function` | `azurerm_frontdoor_rules_engine` |
 | **Compute** | [`multicloud_serverless_function`](docs/resources/serverless_function.md)| `aws_lambda_function` | `google_cloudfunctions2_function` | `azurerm_linux_function_app` |
 | **Compute** | [`multicloud_virtual_machine`](docs/resources/virtual_machine.md) | `aws_instance` | `google_compute_instance` | `azurerm_linux_virtual_machine` |
@@ -202,12 +203,14 @@ graph TD
 | **DNS** | [`multicloud_dnssec`](docs/resources/dnssec.md) | `aws_route53_key_signing_key` | `google_dns_managed_zone` | `azurerm_dns_zone` |
 | **IAM & Identity** | [`multicloud_iam_role`](docs/resources/iam_role.md) | `aws_iam_role` | `google_service_account` | `azurerm_user_assigned_identity` |
 | **IAM & Identity** | [`multicloud_identity_federation`](docs/resources/identity_federation.md) | AWS IAM OIDC Provider | GCP Workload Identity | Azure Entra ID Workload Identity |
+| **IAM & Identity** | [`multicloud_workload_identity_pool`](docs/resources/workload_identity_pool.md) | AWS IAM OIDC Provider | GCP Workload Identity Pool | Azure Entra Federated Credential |
 | **Messaging**| [`multicloud_event_bridge`](docs/resources/event_bridge.md) | `aws_cloudwatch_event_bus` | `google_eventarc_trigger` | `azurerm_eventgrid_system_topic` |
 | **Messaging**| [`multicloud_message_queue`](docs/resources/message_queue.md) | `aws_sqs_queue` | `google_pubsub_subscription` | `azurerm_servicebus_queue` |
 | **Messaging**| [`multicloud_pubsub_topic`](docs/resources/pubsub_topic.md) | `aws_sns_topic` | `google_pubsub_topic` | `azurerm_servicebus_topic` |
 | **Messaging**| [`multicloud_streaming_cluster`](docs/resources/streaming_cluster.md)| `aws_msk_cluster` | `google_managed_kafka_cluster` | `azurerm_eventhub_namespace` |
 | **Networking**| [`multicloud_api_gateway`](docs/resources/api_gateway.md) | `aws_apigatewayv2_api` | `google_api_gateway_gateway` | `azurerm_api_management` |
 | **Networking**| [`multicloud_cdn_distribution`](docs/resources/cdn_distribution.md) | `aws_cloudfront_distribution` | `google_compute_backend_service` | `azurerm_cdn_endpoint` |
+| **Networking**| [`multicloud_global_anycast_ip`](docs/resources/global_anycast_ip.md) | `aws_globalaccelerator_accelerator` | `google_compute_global_address` | `azurerm_traffic_manager_profile` |
 | **Networking**| [`multicloud_graphql_api`](docs/resources/graphql_api.md) | `aws_appsync_graphql_api` | `google_apigee_environment` | `azurerm_api_management_api` |
 | **Networking**| [`multicloud_load_balancer`](docs/resources/load_balancer.md) | `aws_lb` | `google_compute_forwarding_rule` | `azurerm_lb` |
 | **Networking**| [`multicloud_nat_gateway`](docs/resources/nat_gateway.md) | `aws_nat_gateway` | `google_compute_router_nat` | `azurerm_nat_gateway` |
@@ -232,6 +235,8 @@ graph TD
 | **Security** | [`multicloud_security_group`](docs/resources/security_group.md) | `aws_security_group` | `google_compute_firewall` | `azurerm_network_security_group` |
 | **Security** | [`multicloud_waf_policy`](docs/resources/waf_policy.md) | `aws_wafv2_web_acl` | `google_compute_security_policy` | `azurerm_web_application_firewall_policy` |
 | **Storage** | [`multicloud_storage_bucket`](docs/resources/storage_bucket.md) | `aws_s3_bucket` | `google_storage_bucket` | `azurerm_storage_container` |
+| **Storage** | [`multicloud_storage_inventory_report`](docs/resources/storage_inventory_report.md) | `aws_s3_bucket_inventory` | `google_storage_inventory_report_config` | `azurerm_storage_blob_inventory_policy` |
+| **Storage** | [`multicloud_storage_transfer_job`](docs/resources/storage_transfer_job.md) | `aws_datasync_task` | `google_storage_transfer_job` | `azurerm_storage_sync` |
 
 ---
 

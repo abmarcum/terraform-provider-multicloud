@@ -1,6 +1,6 @@
 # Multi-Cloud Terraform Provider (`terraform-provider-multicloud`) Resources Reference Manual
 
-This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **55 unified resources** provided by `terraform-provider-multicloud`.
+This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **60 unified resources** provided by `terraform-provider-multicloud`.
 
 ---
 

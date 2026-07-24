@@ -1425,6 +1425,139 @@ func main() {
   }
 }`,
 		},
+		{
+			Name:        "global_anycast_ip",
+			Category:    "Networking",
+			Description: "Unified Global Anycast IP Address & Accelerator Endpoint.",
+			AWS:         "aws_globalaccelerator_accelerator",
+			GCP:         "google_compute_global_address",
+			Azure:       "azurerm_traffic_manager_profile",
+			HowItWorks:  "The `multicloud_global_anycast_ip` resource provisions global anycast IP routing and low-latency network acceleration across AWS Global Accelerator, GCP Global External Static IP, and Azure Traffic Manager.",
+			Attributes:  []string{"`name` (String, Required) Anycast IP resource name.", "`ip_address_type` (String, Optional) Protocol version ('IPV4' or 'IPV6')."},
+			BasicExample: `resource "multicloud_global_anycast_ip" "basic" {
+  provider_type   = "aws"
+  name            = "global-accelerator-ip"
+  ip_address_type = "IPV4"
+}`,
+			AdvancedExample: `resource "multicloud_global_anycast_ip" "gcp_advanced" {
+  provider_type   = "gcp"
+  name            = "global-static-ip"
+  ip_address_type = "IPV4"
+
+  extra_config = {
+    "gcp_network_tier" = "PREMIUM"
+  }
+}`,
+		},
+		{
+			Name:        "custom_machine_type",
+			Category:    "Compute",
+			Description: "Unified Custom vCPU & Memory Machine Type Allocation.",
+			AWS:         "aws_launch_template",
+			GCP:         "google_compute_instance (custom-vCPU-RAM)",
+			Azure:       "azurerm_linux_virtual_machine",
+			HowItWorks:  "The `multicloud_custom_machine_type` resource provisions customized vCPU and RAM hardware allocations (e.g. custom-4-16384) across GCP Custom Machine Types, AWS EC2 Launch Templates, and Azure Custom VM sizes.",
+			Attributes:  []string{"`name` (String, Required) Custom machine name.", "`vcpus` (Int64, Required) Custom vCPU core count.", "`memory_mb` (Int64, Required) Custom RAM memory in megabytes."},
+			BasicExample: `resource "multicloud_custom_machine_type" "basic" {
+  provider_type = "gcp"
+  name          = "custom-workload"
+  vcpus         = 4
+  memory_mb     = 16384
+}`,
+			AdvancedExample: `resource "multicloud_custom_machine_type" "aws_advanced" {
+  provider_type = "aws"
+  name          = "custom-ec2-spec"
+  vcpus         = 8
+  memory_mb     = 32768
+
+  extra_config = {
+    "aws_ebs_optimized" = "true"
+  }
+}`,
+		},
+		{
+			Name:        "storage_inventory_report",
+			Category:    "Storage",
+			Description: "Unified Storage Bucket Inventory & Audit Policy.",
+			AWS:         "aws_s3_bucket_inventory",
+			GCP:         "google_storage_inventory_report_config",
+			Azure:       "azurerm_storage_blob_inventory_policy",
+			HowItWorks:  "The `multicloud_storage_inventory_report` resource configures automated object storage auditing and inventory file generation across AWS S3 Bucket Inventory, GCP Cloud Storage Inventory Reports, and Azure Blob Storage Inventory.",
+			Attributes:  []string{"`name` (String, Required) Report configuration name.", "`bucket_name` (String, Required) Target bucket to audit.", "`destination_bucket` (String, Required) Destination report delivery bucket.", "`format` (String, Optional) Report format ('CSV', 'PARQUET', or 'ORC').", "`schedule_frequency` (String, Optional) Frequency ('DAILY' or 'WEEKLY')."},
+			BasicExample: `resource "multicloud_storage_inventory_report" "basic" {
+  provider_type      = "aws"
+  name               = "s3-daily-audit"
+  bucket_name        = "prod-data-bucket"
+  destination_bucket = "prod-inventory-reports"
+  format             = "CSV"
+  schedule_frequency = "DAILY"
+}`,
+			AdvancedExample: `resource "multicloud_storage_inventory_report" "gcp_advanced" {
+  provider_type      = "gcp"
+  name               = "gcs-weekly-inventory"
+  bucket_name        = "company-analytics"
+  destination_bucket = "company-audit-logs"
+  format             = "PARQUET"
+  schedule_frequency = "WEEKLY"
+
+  extra_config = {
+    "gcp_include_prefixes" = "logs/"
+  }
+}`,
+		},
+		{
+			Name:        "workload_identity_pool",
+			Category:    "IAM & Identity",
+			Description: "Unified Workload Identity Federation Pool.",
+			AWS:         "aws_iam_openid_connect_provider",
+			GCP:         "google_iam_workload_identity_pool",
+			Azure:       "azurerm_federated_identity_credential",
+			HowItWorks:  "The `multicloud_workload_identity_pool` resource configures keyless OIDC identity federation pools across GCP Workload Identity Pools, AWS IAM OIDC Providers, and Azure Entra ID Federated Credentials.",
+			Attributes:  []string{"`pool_name` (String, Required) Workload identity pool name.", "`issuer_url` (String, Required) OIDC issuer URL.", "`allowed_audiences` (List, Optional) Allowed audience client IDs.", "`description` (String, Optional) Pool description.", "`disabled` (Bool, Optional) Disable pool state."},
+			BasicExample: `resource "multicloud_workload_identity_pool" "basic" {
+  provider_type = "gcp"
+  pool_name     = "github-actions-pool"
+  issuer_url    = "https://token.actions.githubusercontent.com"
+}`,
+			AdvancedExample: `resource "multicloud_workload_identity_pool" "aws_advanced" {
+  provider_type     = "aws"
+  pool_name         = "gitlab-ci-oidc"
+  issuer_url        = "https://gitlab.com"
+  allowed_audiences = ["https://gitlab.com"]
+
+  extra_config = {
+    "aws_thumbprint_list" = "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+  }
+}`,
+		},
+		{
+			Name:        "storage_transfer_job",
+			Category:    "Storage",
+			Description: "Unified Cross-Cloud Storage Transfer Job.",
+			AWS:         "aws_datasync_task",
+			GCP:         "google_storage_transfer_job",
+			Azure:       "azurerm_storage_sync",
+			HowItWorks:  "The `multicloud_storage_transfer_job` resource provisions batch object migration and data sync jobs across GCP Storage Transfer Service Jobs, AWS DataSync Tasks, and Azure Storage Sync.",
+			Attributes:  []string{"`job_name` (String, Required) Data transfer job name.", "`source_bucket` (String, Required) Source bucket name or URL.", "`destination_bucket` (String, Required) Destination bucket name or URL.", "`schedule_start_time` (String, Optional) ISO-8601 schedule start time.", "`overwrite_objects` (Bool, Optional) Overwrite destination objects."},
+			BasicExample: `resource "multicloud_storage_transfer_job" "basic" {
+  provider_type      = "gcp"
+  job_name           = "aws-to-gcp-sync"
+  source_bucket      = "my-aws-s3-bucket"
+  destination_bucket = "my-gcp-gcs-bucket"
+  overwrite_objects  = true
+}`,
+			AdvancedExample: `resource "multicloud_storage_transfer_job" "aws_advanced" {
+  provider_type      = "aws"
+  job_name           = "datasync-s3-backup"
+  source_bucket      = "prod-data"
+  destination_bucket = "dr-backup"
+  schedule_start_time= "2026-08-01T00:00:00Z"
+
+  extra_config = {
+    "aws_verify_mode" = "POINT_IN_TIME_CONSISTENT"
+  }
+}`,
+		},
 	}
 
 	for _, r := range resources {
