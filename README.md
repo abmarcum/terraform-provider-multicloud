@@ -31,6 +31,7 @@ Managing multi-cloud infrastructure traditionally requires writing and maintaini
 ## Key Enterprise Features
 
 - **55 Unified Resources:** Standardized HCL schemas for storage, compute, networking, databases, security, containers, analytics, observability, IAM, DNS, messaging, data sync, workload identity, secret rotation, and failover management.
+- **Intel Xeon Default Hardware & Explicit `instance_type` SKUs:** Compute resources default to Intel Xeon Platinum hardware (`m6i.*` on AWS, `n2-standard-*` on GCP, `Standard_D*s_v5` on Azure). Customers can either rely on abstract size tiers (`small`, `medium`, `large`) or specify exact cloud instance SKUs directly via `instance_type = "m6i.xlarge"`.
 - **Production Live API Execution & Opt-In Mocking (`mock_mode`):** `terraform plan` and `terraform apply` execute live API calls against AWS, GCP, and Azure by default (`mock_mode = false`), returning authentic cloud diagnostics when credentials or calls fail. An explicit opt-in (`mock_mode = true` or `MULTICLOUD_MOCK_MODE=true`) allows offline dry-run testing and CI/CD simulation.
 - **Cloud-Specific Pass-Through (`extra_config`):** Optional escape-hatch map attribute across all 55 resources enabling engineers to pass provider-specific properties (`aws_s3_bucket_key_enabled`, `gcp_storage_class`, `azure_enable_ddos_protection`) directly to underlying cloud SDKs.
 - **HCL & State Migration Converter (`tools/cmd/tf-migrate`):** Automated migration tool converting legacy AWS (`aws_*`), GCP (`google_*`), and Azure (`azurerm_*`) `.tf` files into unified `multicloud_*` HCL manifests, extracting `extra_config` properties and generating `terraform state mv` scripts to preserve active cloud state without infrastructure destruction.
@@ -300,6 +301,14 @@ resource "multicloud_storage_bucket" "gcp_storage" {
   extra_config = {
     "gcp_storage_class" = "NEARLINE"
   }
+}
+
+# Intel Xeon Virtual Machine with Explicit Instance Type
+resource "multicloud_virtual_machine" "aws_intel_compute" {
+  provider_type = "aws"
+  vm_name       = "prod-intel-workload"
+  region        = "us-west-2"
+  instance_type = "m6i.large" # 3rd Gen Intel Xeon Platinum 8375C (Ice Lake)
 }
 
 # Multi-Cloud Disaster Recovery Failover Policy

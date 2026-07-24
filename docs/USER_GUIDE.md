@@ -93,6 +93,15 @@ resource "multicloud_storage_bucket" "gcp_data" {
     "gcp_storage_class" = "NEARLINE"
   }
 }
+
+# Intel Xeon Virtual Machine with Explicit Instance Type
+resource "multicloud_virtual_machine" "app_server" {
+  provider_type = "aws"
+  vm_name       = "prod-app-server"
+  region        = "us-west-2"
+  size_tier     = "medium"      # Defaults to Intel Xeon Ice Lake (m6i.large)
+  instance_type = "m6i.xlarge"  # Explicit Intel Xeon Platinum instance type SKU
+}
 ```
 
 ---
