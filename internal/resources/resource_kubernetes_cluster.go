@@ -25,9 +25,10 @@ type KubernetesClusterModel struct {
 	ClusterName  types.String `tfsdk:"cluster_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	Version      types.String `tfsdk:"version"`
-	NodeCount    types.Int64  `tfsdk:"node_count"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
-	Region       types.String `tfsdk:"region"` 
+	NodeCount             types.Int64  `tfsdk:"node_count"`
+	PrivateClusterEnabled types.Bool   `tfsdk:"private_cluster_enabled"`
+	ExtraConfig           types.Map    `tfsdk:"extra_config"` 
+	Region                types.String `tfsdk:"region"` 
 }
 
 func NewKubernetesClusterResource() resource.Resource {
@@ -57,6 +58,9 @@ func (r *KubernetesClusterResource) Schema(ctx context.Context, req resource.Sch
 				Optional: true,
 			},
 			"node_count": schema.Int64Attribute{
+				Optional: true,
+			},
+			"private_cluster_enabled": schema.BoolAttribute{
 				Optional: true,
 			},
 			"extra_config": schema.MapAttribute{

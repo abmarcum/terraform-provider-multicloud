@@ -135,6 +135,18 @@ func (p *MulticloudProvider) Resources(ctx context.Context) []func() resource.Re
 		resources.NewMetricAlertResource,
 		resources.NewLogWorkspaceResource,
 		resources.NewGraphQLAPIResource,
+		resources.NewDNSRecordResource,
+		resources.NewDNSHealthCheckResource,
+		resources.NewDNSZoneLinkResource,
+		resources.NewDNSResolverResource,
+		resources.NewDNSSECResource,
+		resources.NewTransitGatewayResource,
+		resources.NewPrivateEndpointResource,
+		resources.NewSecurityCenterResource,
+		resources.NewKMSPolicyResource,
+		resources.NewDataPipelineResource,
+		resources.NewFeatureStoreResource,
+		resources.NewEdgeFunctionResource,
 	}
 }
 

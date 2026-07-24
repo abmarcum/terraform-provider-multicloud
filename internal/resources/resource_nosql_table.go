@@ -24,9 +24,12 @@ type NoSQLTableModel struct {
 	ID           types.String `tfsdk:"id"`
 	TableName    types.String `tfsdk:"table_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
-	PartitionKey types.String `tfsdk:"partition_key"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
-	Region       types.String `tfsdk:"region"` 
+	PartitionKey     types.String `tfsdk:"partition_key"`
+	RangeKey         types.String `tfsdk:"range_key"`
+	BillingMode      types.String `tfsdk:"billing_mode"`
+	TTLAttributeName types.String `tfsdk:"ttl_attribute_name"`
+	ExtraConfig      types.Map    `tfsdk:"extra_config"` 
+	Region           types.String `tfsdk:"region"` 
 }
 
 func NewNoSQLTableResource() resource.Resource {
@@ -53,6 +56,15 @@ func (r *NoSQLTableResource) Schema(ctx context.Context, req resource.SchemaRequ
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"partition_key": schema.StringAttribute{
+				Optional: true,
+			},
+			"range_key": schema.StringAttribute{
+				Optional: true,
+			},
+			"billing_mode": schema.StringAttribute{
+				Optional: true,
+			},
+			"ttl_attribute_name": schema.StringAttribute{
 				Optional: true,
 			},
 			"extra_config": schema.MapAttribute{

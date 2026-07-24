@@ -52,6 +52,18 @@ func TestAllUnifiedResourcesMetadataAndSchema(t *testing.T) {
 		"multicloud_metric_alert":        NewMetricAlertResource,
 		"multicloud_log_workspace":       NewLogWorkspaceResource,
 		"multicloud_graphql_api":         NewGraphQLAPIResource,
+		"multicloud_dns_record":          NewDNSRecordResource,
+		"multicloud_dns_health_check":    NewDNSHealthCheckResource,
+		"multicloud_dns_zone_link":       NewDNSZoneLinkResource,
+		"multicloud_dns_resolver":        NewDNSResolverResource,
+		"multicloud_dnssec":              NewDNSSECResource,
+		"multicloud_transit_gateway":     NewTransitGatewayResource,
+		"multicloud_private_endpoint":    NewPrivateEndpointResource,
+		"multicloud_security_center":     NewSecurityCenterResource,
+		"multicloud_kms_policy":          NewKMSPolicyResource,
+		"multicloud_data_pipeline":       NewDataPipelineResource,
+		"multicloud_feature_store":       NewFeatureStoreResource,
+		"multicloud_edge_function":       NewEdgeFunctionResource,
 	}
 
 	ctx := context.Background()

@@ -32,6 +32,9 @@ type DBInstanceModel struct {
 	BackupRetentionDays types.Int64  `tfsdk:"backup_retention_days"`
 	Username            types.String `tfsdk:"username"`
 	Password            types.String `tfsdk:"password"`
+	KMSKeyID            types.String `tfsdk:"kms_key_id"`
+	DeletionProtection  types.Bool   `tfsdk:"deletion_protection"`
+	StorageType         types.String `tfsdk:"storage_type"`
 	Region              types.String `tfsdk:"region"`
 	ExtraConfig         types.Map    `tfsdk:"extra_config"`
 }
@@ -84,6 +87,15 @@ func (r *DBInstanceResource) Schema(ctx context.Context, req resource.SchemaRequ
 			"password": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
+			},
+			"kms_key_id": schema.StringAttribute{
+				Optional: true,
+			},
+			"deletion_protection": schema.BoolAttribute{
+				Optional: true,
+			},
+			"storage_type": schema.StringAttribute{
+				Optional: true,
 			},
 			"region": schema.StringAttribute{
 				Optional: true,

@@ -27,6 +27,7 @@ type CacheClusterModel struct {
 	Engine       types.String `tfsdk:"engine"`
 	NodeType     types.String `tfsdk:"node_type"`
 	NumNodes     types.Int64  `tfsdk:"num_nodes"`
+	Port         types.Int64  `tfsdk:"port"`
 	Region       types.String `tfsdk:"region"`
 	ExtraConfig  types.Map    `tfsdk:"extra_config"`
 }
@@ -61,6 +62,9 @@ func (r *CacheClusterResource) Schema(ctx context.Context, req resource.SchemaRe
 				Optional: true,
 			},
 			"num_nodes": schema.Int64Attribute{
+				Optional: true,
+			},
+			"port": schema.Int64Attribute{
 				Optional: true,
 			},
 			"region": schema.StringAttribute{

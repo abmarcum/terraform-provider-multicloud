@@ -26,6 +26,7 @@ type IAMRoleModel struct {
 	ProviderType     types.String `tfsdk:"provider_type"`
 	Description      types.String `tfsdk:"description"`
 	AssumeRolePolicy types.String `tfsdk:"assume_role_policy"`
+	Path             types.String `tfsdk:"path"`
 	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
 	Region       types.String `tfsdk:"region"` 
 }
@@ -57,6 +58,9 @@ func (r *IAMRoleResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Optional: true,
 			},
 			"assume_role_policy": schema.StringAttribute{
+				Optional: true,
+			},
+			"path": schema.StringAttribute{
 				Optional: true,
 			},
 			"extra_config": schema.MapAttribute{

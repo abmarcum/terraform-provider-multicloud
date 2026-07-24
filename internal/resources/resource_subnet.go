@@ -25,9 +25,10 @@ type SubnetModel struct {
 	SubnetName   types.String `tfsdk:"subnet_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
 	NetworkID    types.String `tfsdk:"network_id"`
-	CIDRBlock    types.String `tfsdk:"cidr_block"`
-	Region       types.String `tfsdk:"region"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
+	CIDRBlock               types.String `tfsdk:"cidr_block"`
+	PrivateIPGoogleAccess   types.Bool   `tfsdk:"private_ip_google_access"`
+	Region                  types.String `tfsdk:"region"`
+	ExtraConfig             types.Map    `tfsdk:"extra_config"` 
 }
 
 func NewSubnetResource() resource.Resource {
@@ -58,6 +59,9 @@ func (r *SubnetResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"cidr_block": schema.StringAttribute{
 				Required: true,
+			},
+			"private_ip_google_access": schema.BoolAttribute{
+				Optional: true,
 			},
 			"region": schema.StringAttribute{
 				Optional: true,

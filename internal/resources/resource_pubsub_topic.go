@@ -24,9 +24,11 @@ type PubSubTopicModel struct {
 	ID           types.String `tfsdk:"id"`
 	TopicName    types.String `tfsdk:"topic_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
-	TopicARNID   types.String `tfsdk:"topic_arn_id"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
-	Region       types.String `tfsdk:"region"` 
+	TopicARNID     types.String `tfsdk:"topic_arn_id"`
+	KMSMasterKeyID types.String `tfsdk:"kms_master_key_id"`
+	FIFOTopic      types.Bool   `tfsdk:"fifo_topic"`
+	ExtraConfig    types.Map    `tfsdk:"extra_config"` 
+	Region         types.String `tfsdk:"region"` 
 }
 
 func NewPubSubTopicResource() resource.Resource {
@@ -54,6 +56,12 @@ func (r *PubSubTopicResource) Schema(ctx context.Context, req resource.SchemaReq
 			},
 			"topic_arn_id": schema.StringAttribute{
 				Computed: true,
+			},
+			"kms_master_key_id": schema.StringAttribute{
+				Optional: true,
+			},
+			"fifo_topic": schema.BoolAttribute{
+				Optional: true,
 			},
 			"extra_config": schema.MapAttribute{
 				ElementType: types.StringType,

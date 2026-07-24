@@ -26,6 +26,8 @@ type KMSKeyModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	KeyUsage     types.String `tfsdk:"key_usage"`
 	KeyARNID     types.String `tfsdk:"key_arn_id"`
+	Description  types.String `tfsdk:"description"`
+	AliasName    types.String `tfsdk:"alias_name"`
 	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
 	Region       types.String `tfsdk:"region"` 
 }
@@ -58,6 +60,12 @@ func (r *KMSKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"key_arn_id": schema.StringAttribute{
 				Computed: true,
+			},
+			"description": schema.StringAttribute{
+				Optional: true,
+			},
+			"alias_name": schema.StringAttribute{
+				Optional: true,
 			},
 			"extra_config": schema.MapAttribute{
 				ElementType: types.StringType,

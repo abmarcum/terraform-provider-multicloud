@@ -26,9 +26,10 @@ type LoadBalancerModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	Internal     types.Bool   `tfsdk:"internal"`
 	BalancerType types.String `tfsdk:"balancer_type"`
-	SubnetIDs    types.List   `tfsdk:"subnet_ids"`
-	Region       types.String `tfsdk:"region"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"`
+	SubnetIDs          types.List   `tfsdk:"subnet_ids"`
+	IdleTimeoutSeconds types.Int64  `tfsdk:"idle_timeout_seconds"`
+	Region             types.String `tfsdk:"region"`
+	ExtraConfig        types.Map    `tfsdk:"extra_config"`
 }
 
 func NewLoadBalancerResource() resource.Resource {
@@ -63,6 +64,9 @@ func (r *LoadBalancerResource) Schema(ctx context.Context, req resource.SchemaRe
 			"subnet_ids": schema.ListAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
+			},
+			"idle_timeout_seconds": schema.Int64Attribute{
+				Optional: true,
 			},
 			"region": schema.StringAttribute{
 				Optional: true,

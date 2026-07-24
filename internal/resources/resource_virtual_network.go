@@ -26,6 +26,7 @@ type VirtualNetworkModel struct {
 	ProviderType types.String `tfsdk:"provider_type"`
 	Region       types.String `tfsdk:"region"`
 	CIDRBlock    types.String `tfsdk:"cidr_block"`
+	DNSServers   types.List   `tfsdk:"dns_servers"`
 	Tags         types.Map    `tfsdk:"tags"`
 	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
 }
@@ -59,6 +60,10 @@ func (r *VirtualNetworkResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"cidr_block": schema.StringAttribute{
 				Required: true,
+			},
+			"dns_servers": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 			"tags": schema.MapAttribute{
 				ElementType: types.StringType,

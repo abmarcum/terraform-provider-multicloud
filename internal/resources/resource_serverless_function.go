@@ -28,6 +28,7 @@ type ServerlessFunctionModel struct {
 	Handler              types.String `tfsdk:"handler"`
 	MemorySizeMB         types.Int64  `tfsdk:"memory_size_mb"`
 	TimeoutSeconds       types.Int64  `tfsdk:"timeout_seconds"`
+	VPCSubnetIDs         types.List   `tfsdk:"vpc_subnet_ids"`
 	Region               types.String `tfsdk:"region"`
 	ExtraConfig          types.Map    `tfsdk:"extra_config"`
 	EnvironmentVariables types.Map    `tfsdk:"environment_variables"`
@@ -67,6 +68,10 @@ func (r *ServerlessFunctionResource) Schema(ctx context.Context, req resource.Sc
 			},
 			"timeout_seconds": schema.Int64Attribute{
 				Optional: true,
+			},
+			"vpc_subnet_ids": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 			"region": schema.StringAttribute{
 				Optional: true,

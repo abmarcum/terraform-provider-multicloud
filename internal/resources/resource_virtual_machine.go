@@ -21,16 +21,20 @@ type VirtualMachineResource struct {
 }
 
 type VirtualMachineModel struct {
-	ID           types.String `tfsdk:"id"`
-	VMName       types.String `tfsdk:"vm_name"`
-	ProviderType types.String `tfsdk:"provider_type"`
-	Region       types.String `tfsdk:"region"`
-	SizeTier     types.String `tfsdk:"size_tier"`
-	ImageID      types.String `tfsdk:"image_id"`
-	SubnetID     types.String `tfsdk:"subnet_id"`
-	SSHPublicKey types.String `tfsdk:"ssh_public_key"`
-	Tags         types.Map    `tfsdk:"tags"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"`
+	ID                types.String `tfsdk:"id"`
+	VMName            types.String `tfsdk:"vm_name"`
+	ProviderType      types.String `tfsdk:"provider_type"`
+	Region            types.String `tfsdk:"region"`
+	SizeTier          types.String `tfsdk:"size_tier"`
+	ImageID           types.String `tfsdk:"image_id"`
+	SubnetID          types.String `tfsdk:"subnet_id"`
+	SSHPublicKey      types.String `tfsdk:"ssh_public_key"`
+	OSDiskSizeGB      types.Int64  `tfsdk:"os_disk_size_gb"`
+	OSDiskType        types.String `tfsdk:"os_disk_type"`
+	UserData          types.String `tfsdk:"user_data"`
+	AssociatePublicIP types.Bool   `tfsdk:"associate_public_ip"`
+	Tags              types.Map    `tfsdk:"tags"`
+	ExtraConfig       types.Map    `tfsdk:"extra_config"`
 }
 
 func NewVirtualMachineResource() resource.Resource {
@@ -73,6 +77,18 @@ func (r *VirtualMachineResource) Schema(ctx context.Context, req resource.Schema
 			"ssh_public_key": schema.StringAttribute{
 				Optional:  true,
 				Sensitive: true,
+			},
+			"os_disk_size_gb": schema.Int64Attribute{
+				Optional: true,
+			},
+			"os_disk_type": schema.StringAttribute{
+				Optional: true,
+			},
+			"user_data": schema.StringAttribute{
+				Optional: true,
+			},
+			"associate_public_ip": schema.BoolAttribute{
+				Optional: true,
 			},
 			"tags": schema.MapAttribute{
 				ElementType: types.StringType,

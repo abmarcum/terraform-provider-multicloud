@@ -26,6 +26,7 @@ type ContainerRegistryModel struct {
 	RegistryName   types.String `tfsdk:"registry_name"`
 	ProviderType   types.String `tfsdk:"provider_type"`
 	ScanOnPush     types.Bool   `tfsdk:"scan_on_push"`
+	AdminEnabled   types.Bool   `tfsdk:"admin_enabled"`
 	RepositoryURL  types.String `tfsdk:"repository_url"`
 	Region         types.String `tfsdk:"region"`
 	ExtraConfig    types.Map    `tfsdk:"extra_config"`
@@ -58,6 +59,9 @@ func (r *ContainerRegistryResource) Schema(ctx context.Context, req resource.Sch
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"scan_on_push": schema.BoolAttribute{
+				Optional: true,
+			},
+			"admin_enabled": schema.BoolAttribute{
 				Optional: true,
 			},
 			"repository_url": schema.StringAttribute{

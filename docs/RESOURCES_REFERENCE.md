@@ -1,6 +1,6 @@
 # Multi-Cloud Terraform Provider (`terraform-provider-multicloud`) Resources Reference Manual
 
-This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **43 unified resources** provided by `terraform-provider-multicloud`.
+This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **55 unified resources** provided by `terraform-provider-multicloud`.
 
 ---
 
@@ -492,4 +492,134 @@ Unified managed GraphQL API endpoint.
   - `api_name` (String, Required) - GraphQL API name.
   - `authentication_type` (String, Optional) - Auth type.
   - `schema_definition` (String, Optional) - GraphQL SDL schema string.
+
+### `multicloud_dns_record`
+Unified DNS resource record set.
+- **AWS Target:** `aws_route53_record`
+- **GCP Target:** `google_dns_record_set`
+- **Azure Target:** `azurerm_dns_a_record`
+- **Attributes:**
+  - `zone_id` (String, Required) - Parent DNS zone ID.
+  - `record_name` (String, Required) - Record hostname.
+  - `record_type` (String, Required) - DNS type (A, CNAME, etc.).
+  - `ttl` (Int64, Optional) - Time-To-Live.
+  - `records` (List[String], Optional) - List of target IPs or hostnames.
+
+### `multicloud_dns_health_check`
+Unified automated DNS health check monitor.
+- **AWS Target:** `aws_route53_health_check`
+- **GCP Target:** `google_monitoring_uptime_check_config`
+- **Azure Target:** `azurerm_traffic_manager_endpoint`
+- **Attributes:**
+  - `check_name` (String, Required) - Health check probe name.
+  - `type` (String, Required) - Probe protocol (HTTP, HTTPS, TCP).
+  - `fqdn` (String, Optional) - Target FQDN.
+  - `ip_address` (String, Optional) - Target IP address.
+  - `port` (Int64, Optional) - Target port.
+  - `resource_path` (String, Optional) - HTTP URI path.
+  - `failure_threshold` (Int64, Optional) - Threshold count.
+
+### `multicloud_dns_zone_link`
+Unified private DNS network association.
+- **AWS Target:** `aws_route53_zone_association`
+- **GCP Target:** `google_dns_managed_zone` (private visibility)
+- **Azure Target:** `azurerm_private_dns_zone_virtual_network_link`
+- **Attributes:**
+  - `link_name` (String, Required) - Association name.
+  - `zone_id` (String, Required) - Private DNS zone ID.
+  - `vpc_id` (String, Required) - Target VPC/VNet ID.
+  - `registration_enabled` (Bool, Optional) - Auto-register VM hostnames.
+
+### `multicloud_dns_resolver`
+Unified hybrid cloud DNS resolver endpoint.
+- **AWS Target:** `aws_route53_resolver_endpoint`
+- **GCP Target:** `google_dns_policy`
+- **Azure Target:** `azurerm_private_dns_resolver`
+- **Attributes:**
+  - `resolver_name` (String, Required) - Resolver endpoint name.
+  - `direction` (String, Required) - INBOUND or OUTBOUND.
+  - `vpc_id` (String, Required) - Parent VPC ID.
+  - `ip_configurations` (List[String], Optional) - Subnet/IP list.
+
+### `multicloud_dnssec`
+Unified DNSSEC zone signing security.
+- **AWS Target:** `aws_route53_key_signing_key`
+- **GCP Target:** `google_dns_managed_zone`
+- **Azure Target:** `azurerm_dns_zone`
+- **Attributes:**
+  - `zone_id` (String, Required) - Target DNS zone ID.
+  - `state` (String, Required) - Signing state (ON/OFF).
+  - `key_type` (String, Optional) - Key algorithm type.
+
+### `multicloud_transit_gateway`
+Unified global transit gateway interconnect hub.
+- **AWS Target:** `aws_ec2_transit_gateway`
+- **GCP Target:** `google_network_connectivity_hub`
+- **Azure Target:** `azurerm_virtual_wan` / `azurerm_virtual_hub`
+- **Attributes:**
+  - `gateway_name` (String, Required) - Gateway hub name.
+  - `asn` (Int64, Optional) - BGP Autonomous System Number.
+  - `auto_accept_shared_attachments` (Bool, Optional) - Auto accept cross-account attachments.
+
+### `multicloud_private_endpoint`
+Unified private link endpoint attachment.
+- **AWS Target:** `aws_vpc_endpoint` (Interface Endpoint)
+- **GCP Target:** `google_compute_global_forwarding_rule` (PSC)
+- **Azure Target:** `azurerm_private_endpoint`
+- **Attributes:**
+  - `endpoint_name` (String, Required) - Private endpoint name.
+  - `vpc_id` (String, Required) - Parent VPC/VNet ID.
+  - `service_name` (String, Required) - Target service identifier.
+  - `subnet_ids` (List[String], Optional) - Subnet IDs.
+
+### `multicloud_security_center`
+Unified cloud security posture and threat monitoring center.
+- **AWS Target:** `aws_securityhub_account`
+- **GCP Target:** `google_scc_source`
+- **Azure Target:** `azurerm_security_center_subscription_pricing`
+- **Attributes:**
+  - `center_name` (String, Required) - Security center instance name.
+  - `tier` (String, Optional) - Tier plan (STANDARD/ADVANCED).
+  - `enable_auto_pruning` (Bool, Optional) - Auto-prune resolved security findings.
+
+### `multicloud_kms_policy`
+Unified KMS key access policy and grant manager.
+- **AWS Target:** `aws_kms_key_policy` / `aws_kms_grant`
+- **GCP Target:** `google_kms_crypto_key_iam_binding`
+- **Azure Target:** `azurerm_key_vault_access_policy`
+- **Attributes:**
+  - `policy_name` (String, Required) - Policy name.
+  - `key_id` (String, Required) - Target KMS key ID.
+  - `policy_json` (String, Required) - Policy JSON document.
+
+### `multicloud_data_pipeline`
+Unified ETL batch data processing pipeline.
+- **AWS Target:** `aws_glue_crawler` / `aws_emr_cluster`
+- **GCP Target:** `google_dataflow_job` / `google_dataproc_cluster`
+- **Azure Target:** `azurerm_data_factory_pipeline`
+- **Attributes:**
+  - `pipeline_name` (String, Required) - Data pipeline job name.
+  - `engine` (String, Optional) - Processing engine (SPARK, FLINK, GLUE).
+  - `max_workers` (Int64, Optional) - Maximum worker node count.
+
+### `multicloud_feature_store`
+Unified MLOps machine learning feature store catalog.
+- **AWS Target:** `aws_sagemaker_feature_group`
+- **GCP Target:** `google_vertex_ai_featurestore`
+- **Azure Target:** `azurerm_machine_learning_workspace`
+- **Attributes:**
+  - `store_name` (String, Required) - Feature store catalog name.
+  - `online_store_enabled` (Bool, Optional) - Enable real-time online feature serving.
+
+### `multicloud_edge_function`
+Unified edge serverless PoP code execution function.
+- **AWS Target:** `aws_cloudfront_function` / `aws_lambda_function` (Lambda@Edge)
+- **GCP Target:** `google_cloudfunctions_function` (CDN Edge)
+- **Azure Target:** `azurerm_frontdoor_rules_engine`
+- **Attributes:**
+  - `function_name` (String, Required) - Edge function name.
+  - `runtime` (String, Optional) - Execution runtime (js-1.0, nodejs20).
+  - `code_content` (String, Required) - Edge function code content.
+
+
 

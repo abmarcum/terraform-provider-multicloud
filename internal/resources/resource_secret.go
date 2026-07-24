@@ -24,9 +24,11 @@ type SecretModel struct {
 	ID           types.String `tfsdk:"id"`
 	SecretName   types.String `tfsdk:"secret_name"`
 	ProviderType types.String `tfsdk:"provider_type"`
-	SecretValue  types.String `tfsdk:"secret_value"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
-	Region       types.String `tfsdk:"region"` 
+	SecretValue       types.String `tfsdk:"secret_value"`
+	KMSKeyID          types.String `tfsdk:"kms_key_id"`
+	AutomaticRotation types.Bool   `tfsdk:"automatic_rotation"`
+	ExtraConfig       types.Map    `tfsdk:"extra_config"` 
+	Region            types.String `tfsdk:"region"` 
 }
 
 func NewSecretResource() resource.Resource {
@@ -55,6 +57,12 @@ func (r *SecretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"secret_value": schema.StringAttribute{
 				Required:  true,
 				Sensitive: true,
+			},
+			"kms_key_id": schema.StringAttribute{
+				Optional: true,
+			},
+			"automatic_rotation": schema.BoolAttribute{
+				Optional: true,
 			},
 			"extra_config": schema.MapAttribute{
 				ElementType: types.StringType,

@@ -27,9 +27,13 @@ type ContainerAppModel struct {
 	Image        types.String `tfsdk:"image"`
 	CPU          types.String `tfsdk:"cpu"`
 	Memory       types.String `tfsdk:"memory"`
-	Port         types.Int64  `tfsdk:"port"`
-	Region       types.String `tfsdk:"region"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"`
+	Port                 types.Int64  `tfsdk:"port"`
+	MinReplicas          types.Int64  `tfsdk:"min_replicas"`
+	MaxReplicas          types.Int64  `tfsdk:"max_replicas"`
+	IngressVisibility    types.String `tfsdk:"ingress_visibility"`
+	EnvironmentVariables types.Map    `tfsdk:"environment_variables"`
+	Region               types.String `tfsdk:"region"`
+	ExtraConfig          types.Map    `tfsdk:"extra_config"`
 }
 
 func NewContainerAppResource() resource.Resource {
@@ -66,6 +70,19 @@ func (r *ContainerAppResource) Schema(ctx context.Context, req resource.SchemaRe
 			},
 			"port": schema.Int64Attribute{
 				Optional: true,
+			},
+			"min_replicas": schema.Int64Attribute{
+				Optional: true,
+			},
+			"max_replicas": schema.Int64Attribute{
+				Optional: true,
+			},
+			"ingress_visibility": schema.StringAttribute{
+				Optional: true,
+			},
+			"environment_variables": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 			"region": schema.StringAttribute{
 				Optional: true,

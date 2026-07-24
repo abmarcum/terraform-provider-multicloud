@@ -21,13 +21,16 @@ type StorageBucketResource struct {
 }
 
 type StorageBucketModel struct {
-	ID                types.String `tfsdk:"id"`
-	BucketName        types.String `tfsdk:"bucket_name"`
-	ProviderType      types.String `tfsdk:"provider_type"`
-	Region            types.String `tfsdk:"region"`
-	VersioningEnabled types.Bool   `tfsdk:"versioning_enabled"`
-	EncryptionEnabled types.Bool   `tfsdk:"encryption_enabled"`
-	ExtraConfig       types.Map    `tfsdk:"extra_config"`
+	ID                  types.String `tfsdk:"id"`
+	BucketName          types.String `tfsdk:"bucket_name"`
+	ProviderType        types.String `tfsdk:"provider_type"`
+	Region              types.String `tfsdk:"region"`
+	VersioningEnabled   types.Bool   `tfsdk:"versioning_enabled"`
+	EncryptionEnabled   types.Bool   `tfsdk:"encryption_enabled"`
+	PublicAccessBlock   types.Bool   `tfsdk:"public_access_block"`
+	LoggingTargetBucket types.String `tfsdk:"logging_target_bucket"`
+	ForceDestroy        types.Bool   `tfsdk:"force_destroy"`
+	ExtraConfig         types.Map    `tfsdk:"extra_config"`
 }
 
 func NewStorageBucketResource() resource.Resource {
@@ -43,9 +46,9 @@ func (r *StorageBucketResource) Schema(ctx context.Context, req resource.SchemaR
 		Description: "Multi-Cloud Storage Bucket resource supporting AWS S3, GCP Cloud Storage, and Azure Storage Container.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed:            true,
-				Description:         "Unique identifier for the storage bucket resource.",
-				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				Computed:      true,
+				Description:   "Unique identifier for the storage bucket resource.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"bucket_name": schema.StringAttribute{
 				Required:    true,
@@ -69,6 +72,18 @@ func (r *StorageBucketResource) Schema(ctx context.Context, req resource.SchemaR
 				Optional:    true,
 				Computed:    true,
 				Description: "Enable server-side encryption.",
+			},
+			"public_access_block": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Block public access to storage bucket objects.",
+			},
+			"logging_target_bucket": schema.StringAttribute{
+				Optional:    true,
+				Description: "Target bucket name for access logging.",
+			},
+			"force_destroy": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Allow deletion of bucket containing objects.",
 			},
 			"extra_config": schema.MapAttribute{
 				ElementType: types.StringType,

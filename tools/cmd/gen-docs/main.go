@@ -21,7 +21,7 @@ type ResourceMeta struct {
 
 func main() {
 	fmt.Println("======================================================================")
-	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (43 RESOURCES)")
+	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (55 RESOURCES)")
 	fmt.Println("======================================================================")
 
 	docsDir := "docs/resources"
@@ -1109,6 +1109,319 @@ func main() {
 
   extra_config = {
     "azure_path" = "graphql"
+  }
+}`,
+		},
+		{
+			Name:        "dns_record",
+			Category:    "DNS",
+			Description: "Unified DNS Resource Record Set.",
+			AWS:         "aws_route53_record",
+			GCP:         "google_dns_record_set",
+			Azure:       "azurerm_dns_a_record",
+			HowItWorks:  "The `multicloud_dns_record` resource provisions A, AAAA, CNAME, TXT, MX, and NS record sets across AWS Route53, GCP Cloud DNS, and Azure DNS.",
+			Attributes:  []string{"`zone_id` (String, Required) Parent DNS zone ID.", "`record_name` (String, Required) Record hostname.", "`record_type` (String, Required) DNS type (A, CNAME, etc.).", "`ttl` (Int64, Optional) Time-To-Live.", "`records` (List[String], Optional) List of target IPs/hostnames."},
+			BasicExample: `resource "multicloud_dns_record" "basic" {
+  provider_type = "aws"
+  zone_id       = multicloud_dns_zone.main.id
+  record_name   = "api.example.com"
+  record_type   = "A"
+  ttl           = 300
+  records       = ["192.0.2.1"]
+}`,
+			AdvancedExample: `resource "multicloud_dns_record" "gcp_advanced" {
+  provider_type = "gcp"
+  zone_id       = "prod-zone"
+  record_name   = "app.example.com"
+  record_type   = "CNAME"
+  ttl           = 60
+  records       = ["lb.example.com"]
+
+  extra_config = {
+    "gcp_routing_policy" = "WRR"
+  }
+}`,
+		},
+		{
+			Name:        "dns_health_check",
+			Category:    "DNS",
+			Description: "Unified Automated DNS Health Check Monitor.",
+			AWS:         "aws_route53_health_check",
+			GCP:         "google_monitoring_uptime_check_config",
+			Azure:       "azurerm_traffic_manager_endpoint",
+			HowItWorks:  "The `multicloud_dns_health_check` resource provisions endpoint monitoring probes across AWS Route53 Health Checks, GCP Uptime Checks, and Azure Traffic Manager Probes.",
+			Attributes:  []string{"`check_name` (String, Required) Health check name.", "`type` (String, Required) Probe protocol (HTTP, HTTPS, TCP).", "`fqdn` (String, Optional) Target FQDN.", "`ip_address` (String, Optional) Target IP.", "`port` (Int64, Optional) Port number.", "`resource_path` (String, Optional) HTTP probe URI path.", "`failure_threshold` (Int64, Optional) Failure threshold count."},
+			BasicExample: `resource "multicloud_dns_health_check" "basic" {
+  provider_type     = "aws"
+  check_name        = "api-health"
+  type              = "HTTPS"
+  fqdn              = "api.example.com"
+  port              = 443
+  resource_path     = "/healthz"
+  failure_threshold = 3
+}`,
+			AdvancedExample: `resource "multicloud_dns_health_check" "azure_advanced" {
+  provider_type     = "azure"
+  check_name        = "web-probe"
+  type              = "HTTP"
+  fqdn              = "web.example.com"
+  port              = 80
+  failure_threshold = 2
+
+  extra_config = {
+    "azure_probe_interval" = "30"
+  }
+}`,
+		},
+		{
+			Name:        "dns_zone_link",
+			Category:    "DNS",
+			Description: "Unified Private DNS Network Association.",
+			AWS:         "aws_route53_zone_association",
+			GCP:         "google_dns_managed_zone",
+			Azure:       "azurerm_private_dns_zone_virtual_network_link",
+			HowItWorks:  "The `multicloud_dns_zone_link` resource provisions network attachments linking private DNS zones to VPCs/VNets across AWS, GCP, and Azure.",
+			Attributes:  []string{"`link_name` (String, Required) Association name.", "`zone_id` (String, Required) Private DNS zone ID.", "`vpc_id` (String, Required) Target VPC/VNet ID.", "`registration_enabled` (Bool, Optional) Auto-register VM hostnames."},
+			BasicExample: `resource "multicloud_dns_zone_link" "basic" {
+  provider_type = "aws"
+  link_name     = "private-link"
+  zone_id       = multicloud_dns_zone.private.id
+  vpc_id        = multicloud_virtual_network.main.id
+}`,
+			AdvancedExample: `resource "multicloud_dns_zone_link" "azure_advanced" {
+  provider_type        = "azure"
+  link_name            = "vnet-link"
+  zone_id              = "private-dns-zone-id"
+  vpc_id               = "vnet-id"
+  registration_enabled = true
+
+  extra_config = {
+    "azure_auto_registration" = "true"
+  }
+}`,
+		},
+		{
+			Name:        "dns_resolver",
+			Category:    "DNS",
+			Description: "Unified Hybrid Cloud DNS Resolver Endpoint.",
+			AWS:         "aws_route53_resolver_endpoint",
+			GCP:         "google_dns_policy",
+			Azure:       "azurerm_private_dns_resolver",
+			HowItWorks:  "The `multicloud_dns_resolver` resource provisions inbound/outbound hybrid DNS forwarding endpoints across AWS Route53 Resolver, GCP DNS Policies, and Azure Private DNS Resolver.",
+			Attributes:  []string{"`resolver_name` (String, Required) Resolver name.", "`direction` (String, Required) INBOUND or OUTBOUND.", "`vpc_id` (String, Required) Parent VPC ID.", "`ip_configurations` (List[String], Optional) Subnet/IP list."},
+			BasicExample: `resource "multicloud_dns_resolver" "basic" {
+  provider_type = "aws"
+  resolver_name = "inbound-resolver"
+  direction     = "INBOUND"
+  vpc_id        = multicloud_virtual_network.main.id
+}`,
+			AdvancedExample: `resource "multicloud_dns_resolver" "gcp_advanced" {
+  provider_type = "gcp"
+  resolver_name = "dns-forwarder"
+  direction     = "OUTBOUND"
+  vpc_id        = "gcp-vpc-id"
+
+  extra_config = {
+    "gcp_logging" = "true"
+  }
+}`,
+		},
+		{
+			Name:        "dnssec",
+			Category:    "DNS",
+			Description: "Unified DNSSEC Zone Signing Security.",
+			AWS:         "aws_route53_key_signing_key",
+			GCP:         "google_dns_managed_zone",
+			Azure:       "azurerm_dns_zone",
+			HowItWorks:  "The `multicloud_dnssec` resource provisions DNSSEC key signing and cryptographic zone authentication across AWS Route53 DNSSEC, GCP Cloud DNSSEC, and Azure DNSSEC.",
+			Attributes:  []string{"`zone_id` (String, Required) Target DNS zone ID.", "`state` (String, Required) Signing state (ON/OFF).", "`key_type` (String, Optional) Key algorithm type."},
+			BasicExample: `resource "multicloud_dnssec" "basic" {
+  provider_type = "aws"
+  zone_id       = multicloud_dns_zone.main.id
+  state         = "ON"
+}`,
+			AdvancedExample: `resource "multicloud_dnssec" "gcp_advanced" {
+  provider_type = "gcp"
+  zone_id       = "pub-zone"
+  state         = "ON"
+  key_type      = "RSASHA256"
+
+  extra_config = {
+    "gcp_ksk_algorithm" = "rsasha256"
+  }
+}`,
+		},
+		{
+			Name:        "transit_gateway",
+			Category:    "Networking",
+			Description: "Unified Global Transit Gateway Interconnect Hub.",
+			AWS:         "aws_ec2_transit_gateway",
+			GCP:         "google_network_connectivity_hub",
+			Azure:       "azurerm_virtual_wan",
+			HowItWorks:  "The `multicloud_transit_gateway` resource provisions multi-region, multi-VPC transit interconnect hubs across AWS Transit Gateway, GCP Network Connectivity Center, and Azure Virtual WAN.",
+			Attributes:  []string{"`gateway_name` (String, Required) Gateway hub name.", "`asn` (Int64, Optional) BGP Autonomous System Number.", "`auto_accept_shared_attachments` (Bool, Optional) Auto accept cross-account attachments."},
+			BasicExample: `resource "multicloud_transit_gateway" "basic" {
+  provider_type = "aws"
+  gateway_name  = "global-hub"
+  asn           = 64512
+}`,
+			AdvancedExample: `resource "multicloud_transit_gateway" "azure_advanced" {
+  provider_type = "azure"
+  gateway_name  = "vwan-hub"
+
+  extra_config = {
+    "azure_vwan_type" = "Standard"
+  }
+}`,
+		},
+		{
+			Name:        "private_endpoint",
+			Category:    "Networking",
+			Description: "Unified Private Link Endpoint Attachment.",
+			AWS:         "aws_vpc_endpoint",
+			GCP:         "google_compute_global_forwarding_rule",
+			Azure:       "azurerm_private_endpoint",
+			HowItWorks:  "The `multicloud_private_endpoint` resource attaches private endpoint interfaces to VPCs/VNets for secure private service access across AWS, GCP, and Azure.",
+			Attributes:  []string{"`endpoint_name` (String, Required) Private endpoint name.", "`vpc_id` (String, Required) Parent VPC/VNet ID.", "`service_name` (String, Required) Target service identifier.", "`subnet_ids` (List[String], Optional) Placement subnet IDs."},
+			BasicExample: `resource "multicloud_private_endpoint" "basic" {
+  provider_type = "aws"
+  endpoint_name = "s3-private-endpoint"
+  vpc_id        = multicloud_virtual_network.main.id
+  service_name  = "com.amazonaws.us-east-1.s3"
+}`,
+			AdvancedExample: `resource "multicloud_private_endpoint" "azure_advanced" {
+  provider_type = "azure"
+  endpoint_name = "kv-private-endpoint"
+  vpc_id        = "vnet-id"
+  service_name  = "Microsoft.KeyVault"
+
+  extra_config = {
+    "azure_private_dns_zone_group" = "default"
+  }
+}`,
+		},
+		{
+			Name:        "security_center",
+			Category:    "Security",
+			Description: "Unified Cloud Security Posture & Threat Monitoring Baseline.",
+			AWS:         "aws_securityhub_account",
+			GCP:         "google_scc_source",
+			Azure:       "azurerm_security_center_subscription_pricing",
+			HowItWorks:  "The `multicloud_security_center` resource enables unified security posture monitoring, compliance auditing, and threat detection across AWS Security Hub, GCP Security Command Center, and Azure Microsoft Defender for Cloud.",
+			Attributes:  []string{"`center_name` (String, Required) Security posture instance name.", "`tier` (String, Optional) Monitoring plan tier (STANDARD/ADVANCED).", "`enable_auto_pruning` (Bool, Optional) Auto-prune resolved security findings."},
+			BasicExample: `resource "multicloud_security_center" "basic" {
+  provider_type = "aws"
+  center_name   = "default-security-center"
+  tier          = "STANDARD"
+}`,
+			AdvancedExample: `resource "multicloud_security_center" "gcp_advanced" {
+  provider_type = "gcp"
+  center_name   = "org-scc"
+  tier          = "ADVANCED"
+
+  extra_config = {
+    "gcp_scc_mode" = "PREMIUM"
+  }
+}`,
+		},
+		{
+			Name:        "kms_policy",
+			Category:    "Security",
+			Description: "Unified KMS Key Access Policy & Grant Management.",
+			AWS:         "aws_kms_key_policy",
+			GCP:         "google_kms_crypto_key_iam_binding",
+			Azure:       "azurerm_key_vault_access_policy",
+			HowItWorks:  "The `multicloud_kms_policy` resource provisions cryptographic key access policies, grant permissions, and IAM key bindings across AWS KMS, GCP KMS, and Azure Key Vault.",
+			Attributes:  []string{"`policy_name` (String, Required) Policy identifier.", "`key_id` (String, Required) Target KMS Key ID.", "`policy_json` (String, Required) IAM/KMS policy document JSON."},
+			BasicExample: `resource "multicloud_kms_policy" "basic" {
+  provider_type = "aws"
+  policy_name   = "key-access-policy"
+  key_id        = multicloud_kms_key.app_key.id
+  policy_json   = jsonencode({ Version = "2012-10-17", Statement = [] })
+}`,
+			AdvancedExample: `resource "multicloud_kms_policy" "azure_advanced" {
+  provider_type = "azure"
+  policy_name   = "kv-policy"
+  key_id        = "kv-key-id"
+  policy_json   = jsonencode({ key_permissions = ["Get", "List", "Encrypt", "Decrypt"] })
+
+  extra_config = {
+    "azure_tenant_id" = "00000000-0000-0000-0000-000000000000"
+  }
+}`,
+		},
+		{
+			Name:        "data_pipeline",
+			Category:    "Analytics",
+			Description: "Unified ETL & Batch Data Processing Pipeline.",
+			AWS:         "aws_glue_crawler",
+			GCP:         "google_dataflow_job",
+			Azure:       "azurerm_data_factory_pipeline",
+			HowItWorks:  "The `multicloud_data_pipeline` resource provisions data extraction, transformation, and batch analytics processing jobs across AWS Glue/EMR, GCP Dataflow/Dataproc, and Azure Data Factory.",
+			Attributes:  []string{"`pipeline_name` (String, Required) Pipeline job name.", "`engine` (String, Optional) Processing engine (SPARK, FLINK, GLUE).", "`max_workers` (Int64, Optional) Maximum worker node count."},
+			BasicExample: `resource "multicloud_data_pipeline" "basic" {
+  provider_type = "aws"
+  pipeline_name = "daily-etl-pipeline"
+  engine        = "GLUE"
+  max_workers   = 10
+}`,
+			AdvancedExample: `resource "multicloud_data_pipeline" "gcp_advanced" {
+  provider_type = "gcp"
+  pipeline_name = "streaming-dataflow"
+  engine        = "FLINK"
+  max_workers   = 20
+
+  extra_config = {
+    "gcp_temp_location" = "gs://my-bucket/tmp"
+  }
+}`,
+		},
+		{
+			Name:        "feature_store",
+			Category:    "Analytics",
+			Description: "Unified MLOps Machine Learning Feature Store.",
+			AWS:         "aws_sagemaker_feature_group",
+			GCP:         "google_vertex_ai_featurestore",
+			Azure:       "azurerm_machine_learning_workspace",
+			HowItWorks:  "The `multicloud_feature_store` resource provisions centralized MLOps machine learning feature catalogs and low-latency online feature serving across AWS SageMaker Feature Store, GCP Vertex AI Featurestore, and Azure Machine Learning Workspace.",
+			Attributes:  []string{"`store_name` (String, Required) Feature store catalog name.", "`online_store_enabled` (Bool, Optional) Enable real-time low-latency online serving."},
+			BasicExample: `resource "multicloud_feature_store" "basic" {
+  provider_type        = "aws"
+  store_name           = "customer-churn-features"
+  online_store_enabled = true
+}`,
+			AdvancedExample: `resource "multicloud_feature_store" "gcp_advanced" {
+  provider_type        = "gcp"
+  store_name           = "recommendation-features"
+  online_store_enabled = true
+
+  extra_config = {
+    "gcp_fixed_node_count" = "2"
+  }
+}`,
+		},
+		{
+			Name:        "edge_function",
+			Category:    "Compute",
+			Description: "Unified Edge PoP Serverless Code Execution.",
+			AWS:         "aws_cloudfront_function",
+			GCP:         "google_cloudfunctions_function",
+			Azure:       "azurerm_frontdoor_rules_engine",
+			HowItWorks:  "The `multicloud_edge_function` resource executes ultra-low-latency serverless code at CDN Points of Presence (PoPs) across AWS CloudFront Functions / Lambda@Edge, GCP Cloud Functions Edge, and Azure Front Door Rules Engine.",
+			Attributes:  []string{"`function_name` (String, Required) Edge function name.", "`runtime` (String, Optional) Execution runtime (js-1.0, nodejs20).", "`code_content` (String, Required) Edge function source code."},
+			BasicExample: `resource "multicloud_edge_function" "basic" {
+  provider_type = "aws"
+  function_name = "url-rewrite"
+  runtime       = "cloudfront-js-1.0"
+  code_content  = "function handler(event) { return event.request; }"
+}`,
+			AdvancedExample: `resource "multicloud_edge_function" "azure_advanced" {
+  provider_type = "azure"
+  function_name = "header-auth"
+  code_content  = "module.exports = async function (context, req) { return { status: 200 }; };"
+
+  extra_config = {
+    "azure_edge_rule_set" = "security-rules"
   }
 }`,
 		},

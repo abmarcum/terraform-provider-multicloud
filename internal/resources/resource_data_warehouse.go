@@ -25,9 +25,11 @@ type DataWarehouseModel struct {
 	WarehouseName types.String `tfsdk:"warehouse_name"`
 	ProviderType  types.String `tfsdk:"provider_type"`
 	NodeType      types.String `tfsdk:"node_type"`
-	NumberOfNodes types.Int64  `tfsdk:"number_of_nodes"`
-	ExtraConfig  types.Map    `tfsdk:"extra_config"` 
-	Region       types.String `tfsdk:"region"` 
+	NumberOfNodes  types.Int64  `tfsdk:"number_of_nodes"`
+	MasterUsername types.String `tfsdk:"master_username"`
+	MasterPassword types.String `tfsdk:"master_password"`
+	ExtraConfig    types.Map    `tfsdk:"extra_config"` 
+	Region         types.String `tfsdk:"region"` 
 }
 
 func NewDataWarehouseResource() resource.Resource {
@@ -58,6 +60,13 @@ func (r *DataWarehouseResource) Schema(ctx context.Context, req resource.SchemaR
 			},
 			"number_of_nodes": schema.Int64Attribute{
 				Optional: true,
+			},
+			"master_username": schema.StringAttribute{
+				Optional: true,
+			},
+			"master_password": schema.StringAttribute{
+				Optional:  true,
+				Sensitive: true,
 			},
 			"extra_config": schema.MapAttribute{
 				ElementType: types.StringType,
