@@ -92,7 +92,7 @@ func (r *APIGatewayResource) Create(ctx context.Context, req resource.CreateRequ
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "api_gateway", plan.APIName.ValueString(), reg, nil)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "api_gateway", plan.APIName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -145,23 +145,9 @@ func (r *APIGatewayResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.APIName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "api_gateway", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "api_gateway", state.APIName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -171,23 +157,9 @@ func (r *APIGatewayResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
-		pType = plan.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.APIName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "api_gateway", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "api_gateway", plan.APIName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -197,12 +169,7 @@ func (r *APIGatewayResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	pType := strings.ToLower(state.ProviderType.ValueString())
-	reg := ""
-	if !state.Region.IsNull() && !state.Region.IsUnknown() {
-		reg = state.Region.ValueString()
-	}
-	_ = adapters.DeleteCloudResource(ctx, pType, "api_gateway", state.APIName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "api_gateway", state.APIName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *APIGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
