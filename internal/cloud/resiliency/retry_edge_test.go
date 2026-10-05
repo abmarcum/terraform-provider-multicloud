@@ -59,3 +59,16 @@ func TestExecuteWithRetryNonRetryableFastFail(t *testing.T) {
 		t.Errorf("expected fast-fail (1 attempt), got %d attempts", attempts)
 	}
 }
+
+func TestRedactSensitiveLogInfo(t *testing.T) {
+	rawErr := errors.New("HTTP 401 Unauthorized: Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.secret and api_key=supersecret123 failed")
+	redacted := RedactSensitiveLogInfo(rawErr)
+	if redacted == nil {
+		t.Fatalf("expected non-nil redacted error")
+	}
+	msg := redacted.Error()
+	if msg == rawErr.Error() {
+		t.Errorf("expected sensitive token and api_key to be redacted, got %q", msg)
+	}
+}
+
