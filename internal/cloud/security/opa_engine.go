@@ -40,7 +40,7 @@ func EvaluateOPARegoPolicyWithAttrs(providerType string, resourceType string, re
 		return EvaluateRegoModule(providerType, resourceType, resourceName, regoRule, attributes)
 	}
 	if policyPath := os.Getenv("OPA_POLICY_PATH"); policyPath != "" {
-		/* #nosec G304 */
+		/* #nosec G304 G703 */
 		if data, err := os.ReadFile(filepath.Clean(policyPath)); err == nil && len(data) > 0 {
 			res := EvaluateRegoModule(providerType, resourceType, resourceName, string(data), attributes)
 			if !res.Passed {
@@ -202,6 +202,12 @@ func resolveInputPath(input map[string]interface{}, dotPath string) (interface{}
 		}
 		curr, ok = m[p]
 		if !ok {
+			if attrs, hasAttrs := m["attributes"].(map[string]interface{}); hasAttrs {
+				if val, found := attrs[p]; found {
+					curr = val
+					continue
+				}
+			}
 			return nil, false
 		}
 	}
