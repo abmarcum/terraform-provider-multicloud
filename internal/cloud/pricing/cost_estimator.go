@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,12 +24,19 @@ type AzureRetailPriceResponse struct {
 	} `json:"Items"`
 }
 
-// AWSPriceResponse models AWS Price List API JSON payload
+// AWSPriceResponse models AWS Price List bulk index / offer JSON payload
 type AWSPriceResponse struct {
 	PriceList []string `json:"PriceList"`
+	Terms     struct {
+		OnDemand map[string]map[string]struct {
+			PriceDimensions map[string]struct {
+				PricePerUnit map[string]string `json:"pricePerUnit"`
+			} `json:"priceDimensions"`
+		} `json:"OnDemand"`
+	} `json:"terms"`
 }
 
-// GCPCatalogResponse models GCP Billing Catalog API SKU payload
+// GCPCatalogResponse models GCP Cloud Billing Catalog API SKU payload
 type GCPCatalogResponse struct {
 	SKUs []struct {
 		Description string `json:"description"`
@@ -66,6 +74,25 @@ var (
 	priceCache   = make(map[string]cachedPrice)
 )
 
+func getCachedPrice(key string) (float64, bool) {
+	now := time.Now()
+	priceCacheMu.RLock()
+	defer priceCacheMu.RUnlock()
+	if entry, ok := priceCache[key]; ok && now.Before(entry.expiresAt) {
+		return entry.price, true
+	}
+	return 0, false
+}
+
+func setCachedPrice(key string, price float64) {
+	priceCacheMu.Lock()
+	priceCache[key] = cachedPrice{
+		price:     price,
+		expiresAt: time.Now().Add(15 * time.Minute),
+	}
+	priceCacheMu.Unlock()
+}
+
 // FetchLiveAzurePrice fetches live pricing from Azure Retail Prices API
 func FetchLiveAzurePrice(skuName string) (float64, error) {
 	return FetchLiveAzurePriceWithContext(context.Background(), skuName)
@@ -73,13 +100,10 @@ func FetchLiveAzurePrice(skuName string) (float64, error) {
 
 // FetchLiveAzurePriceWithContext fetches live pricing from Azure Retail Prices API with context and TTL caching
 func FetchLiveAzurePriceWithContext(ctx context.Context, skuName string) (float64, error) {
-	now := time.Now()
-	priceCacheMu.RLock()
-	if entry, ok := priceCache[skuName]; ok && now.Before(entry.expiresAt) {
-		priceCacheMu.RUnlock()
-		return entry.price, nil
+	cacheKey := "azure:" + skuName
+	if cached, ok := getCachedPrice(cacheKey); ok {
+		return cached, nil
 	}
-	priceCacheMu.RUnlock()
 
 	filter := fmt.Sprintf("armSkuName eq '%s' and priceType eq 'Consumption'", skuName)
 	endpoint := fmt.Sprintf("https://prices.azure.com/api/retail/arm/prices?$filter=%s", url.QueryEscape(filter))
@@ -106,42 +130,130 @@ func FetchLiveAzurePriceWithContext(ctx context.Context, skuName string) (float6
 
 	if len(data.Items) > 0 && data.Items[0].UnitPrice > 0 {
 		monthly := data.Items[0].UnitPrice * 730.0
-		priceCacheMu.Lock()
-		priceCache[skuName] = cachedPrice{
-			price:     monthly,
-			expiresAt: now.Add(15 * time.Minute),
-		}
-		priceCacheMu.Unlock()
+		setCachedPrice(cacheKey, monthly)
 		return monthly, nil
 	}
 
 	return 0, fmt.Errorf("no pricing found for SKU %s", skuName)
 }
 
-// FetchLiveAWSPrice fetches live pricing rate for AWS EC2 instance types
+// FetchLiveAWSPrice fetches pricing rate for AWS EC2 instance types, querying AWS Price List endpoint when configured
 func FetchLiveAWSPrice(instanceType string) (float64, error) {
-	// Baseline AWS EC2 pricing lookup (0.0416 USD/hr for t3.medium = ~$30.40/mo)
-	switch instanceType {
-	case "t3.micro":
-		return 0.0208 * 730.0, nil
-	case "t3.medium":
-		return 0.0416 * 730.0, nil
-	case "t3.large":
-		return 0.0832 * 730.0, nil
+	cacheKey := "aws:" + instanceType
+	if cached, ok := getCachedPrice(cacheKey); ok {
+		return cached, nil
+	}
+
+	if offerURL := os.Getenv("AWS_PRICING_OFFER_URL"); offerURL != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" {
+		/* #nosec G107 G704 */
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, offerURL, nil)
+		if err == nil {
+			/* #nosec G107 G704 */
+			resp, err := liveHTTPClient.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					var awsData AWSPriceResponse
+					if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&awsData); err == nil {
+						for _, skuMap := range awsData.Terms.OnDemand {
+							for _, term := range skuMap {
+								for _, dim := range term.PriceDimensions {
+									if usdStr, ok := dim.PricePerUnit["USD"]; ok {
+										if hourly, err := strconv.ParseFloat(usdStr, 64); err == nil && hourly > 0 {
+											monthly := hourly * 730.0
+											setCachedPrice(cacheKey, monthly)
+											return monthly, nil
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	hourlyRates := map[string]float64{
+		"t3.nano":     0.0052,
+		"t3.micro":    0.0208,
+		"t3.small":    0.0208,
+		"t3.medium":   0.0416,
+		"t3.large":    0.0832,
+		"t3.xlarge":   0.1664,
+		"t4g.small":   0.0168,
+		"t4g.medium":  0.0336,
+		"t4g.large":   0.0672,
+		"m6i.large":   0.0960,
+		"m6i.xlarge":  0.1920,
+		"m6i.2xlarge": 0.3840,
+		"c6i.large":   0.0850,
+		"r6i.large":   0.1260,
+	}
+	if hourly, ok := hourlyRates[strings.ToLower(instanceType)]; ok {
+		monthly := hourly * 730.0
+		setCachedPrice(cacheKey, monthly)
+		return monthly, nil
 	}
 	return 0, fmt.Errorf("unsupported AWS instance type %s", instanceType)
 }
 
-// FetchLiveGCPPrice fetches live pricing rate for GCP Compute Engine machine types
+// FetchLiveGCPPrice fetches pricing rate for GCP Compute Engine machine types, querying Cloud Billing Catalog API when configured
 func FetchLiveGCPPrice(machineType string) (float64, error) {
-	// Baseline GCP Compute pricing lookup (0.0408 USD/hr for e2-medium = ~$29.80/mo)
-	switch machineType {
-	case "e2-micro":
-		return 0.0198 * 730.0, nil
-	case "e2-medium":
-		return 0.0408 * 730.0, nil
-	case "e2-standard-2":
-		return 0.0816 * 730.0, nil
+	cacheKey := "gcp:" + machineType
+	if cached, ok := getCachedPrice(cacheKey); ok {
+		return cached, nil
+	}
+
+	if apiKey := os.Getenv("GCP_BILLING_API_KEY"); apiKey != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" {
+		endpoint := fmt.Sprintf("https://cloudbilling.googleapis.com/v1/services/6F81-5844-456A/skus?key=%s&pageSize=20", url.QueryEscape(apiKey))
+		/* #nosec G107 G704 */
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, nil)
+		if err == nil {
+			/* #nosec G107 G704 */
+			resp, err := liveHTTPClient.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					var catalog GCPCatalogResponse
+					if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&catalog); err == nil {
+						for _, sku := range catalog.SKUs {
+							if strings.Contains(strings.ToLower(sku.Description), strings.ToLower(machineType)) && len(sku.PricingInfo) > 0 {
+								rates := sku.PricingInfo[0].PricingExpression.TieredRates
+								if len(rates) > 0 {
+									units, _ := strconv.ParseFloat(rates[0].UnitPrice.Units, 64)
+									hourly := units + float64(rates[0].UnitPrice.Nanos)/1e9
+									if hourly > 0 {
+										monthly := hourly * 730.0
+										setCachedPrice(cacheKey, monthly)
+										return monthly, nil
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	hourlyRates := map[string]float64{
+		"e2-micro":       0.0198,
+		"e2-small":       0.0198,
+		"e2-medium":      0.0408,
+		"e2-standard-2":  0.0816,
+		"e2-standard-4":  0.1632,
+		"n2-standard-2":  0.0971,
+		"n2-standard-4":  0.1942,
+		"n2-standard-8":  0.3884,
+		"t2a-standard-1": 0.0385,
+		"t2a-standard-2": 0.0770,
+		"t2a-standard-4": 0.1540,
+	}
+	if hourly, ok := hourlyRates[strings.ToLower(machineType)]; ok {
+		monthly := hourly * 730.0
+		setCachedPrice(cacheKey, monthly)
+		return monthly, nil
 	}
 	return 0, fmt.Errorf("unsupported GCP machine type %s", machineType)
 }
@@ -198,10 +310,10 @@ func EstimateMonthlyCost(providerType string, resourceType string, sizeTier stri
 	return EstimateOfflineMonthlyCost(p, r, tier)
 }
 
-// EstimateOfflineMonthlyCost provides fallback baseline prices if external pricing APIs fail
+// EstimateOfflineMonthlyCost provides fallback baseline prices across unified multi-cloud resource types
 func EstimateOfflineMonthlyCost(p, r, tier string) float64 {
 	switch r {
-	case "virtual_machine":
+	case "virtual_machine", "custom_machine_type", "bastion_host":
 		switch tier {
 		case "small":
 			switch p {
@@ -212,7 +324,7 @@ func EstimateOfflineMonthlyCost(p, r, tier string) float64 {
 			case "azure":
 				return 14.80 // Standard_B1s
 			}
-		case "medium":
+		case "medium", "":
 			switch p {
 			case "aws":
 				return 30.40 // t3.medium
@@ -251,6 +363,49 @@ func EstimateOfflineMonthlyCost(p, r, tier string) float64 {
 		case "azure":
 			return 0.00 // AKS free tier control plane
 		}
+
+	case "storage_bucket", "storage_inventory_report", "storage_transfer_job", "data_sync":
+		switch p {
+		case "aws":
+			return 2.30 // S3 Standard 100GB baseline
+		case "gcp":
+			return 2.00 // GCS Standard 100GB baseline
+		case "azure":
+			return 1.84 // Azure Blob Hot 100GB baseline
+		}
+
+	case "load_balancer", "nat_gateway", "vpn_gateway", "transit_gateway", "global_anycast_ip":
+		switch p {
+		case "aws":
+			return 22.50
+		case "gcp":
+			return 18.00
+		case "azure":
+			return 21.90
+		}
+
+	case "cache_cluster", "search_index", "streaming_cluster":
+		switch p {
+		case "aws":
+			return 35.00
+		case "gcp":
+			return 33.50
+		case "azure":
+			return 34.20
+		}
+
+	case "data_warehouse", "ai_endpoint", "feature_store", "data_pipeline":
+		switch p {
+		case "aws":
+			return 180.00
+		case "gcp":
+			return 165.00
+		case "azure":
+			return 175.00
+		}
+
+	case "virtual_network", "subnet", "security_group", "route_table", "iam_role", "kms_policy", "workload_identity_pool", "identity_federation":
+		return 0.00
 	}
 
 	return 10.00
