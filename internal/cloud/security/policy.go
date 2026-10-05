@@ -52,17 +52,22 @@ func ValidatePolicy(resourceType string, resourceName string, attributes map[str
 		}
 	}
 
-	// Rule 3: KMS keys must not explicitly disable key rotation when enforced
+	// Rule 3: KMS keys must not explicitly disable key rotation
 	if strings.Contains(resourceType, "kms_key") {
-		if rot, ok := attributes["require_key_rotation"].(bool); ok && rot {
-			if enabled, ok := attributes["enable_key_rotation"].(bool); ok && !enabled {
-				violations = append(violations, PolicyViolation{
-					RuleName:     "KMS_ROTATION_REQUIRED",
-					ResourceName: resourceName,
-					Severity:     "HIGH",
-					Message:      fmt.Sprintf("Resource '%s' violates security policy: KMS keys must have automatic key rotation enabled.", resourceName),
-				})
-			}
+		rotDisabled := false
+		if enabled, ok := attributes["rotation_enabled"].(bool); ok && !enabled {
+			rotDisabled = true
+		}
+		if enabled, ok := attributes["enable_key_rotation"].(bool); ok && !enabled {
+			rotDisabled = true
+		}
+		if rotDisabled {
+			violations = append(violations, PolicyViolation{
+				RuleName:     "KMS_ROTATION_REQUIRED",
+				ResourceName: resourceName,
+				Severity:     "HIGH",
+				Message:      fmt.Sprintf("Resource '%s' violates security policy: KMS keys must have automatic key rotation enabled.", resourceName),
+			})
 		}
 	}
 
