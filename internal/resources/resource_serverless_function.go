@@ -109,7 +109,7 @@ func (r *ServerlessFunctionResource) Create(ctx context.Context, req resource.Cr
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "serverless_function", plan.FunctionName.ValueString(), reg, nil)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "serverless_function", plan.FunctionName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -165,23 +165,9 @@ func (r *ServerlessFunctionResource) Read(ctx context.Context, req resource.Read
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.FunctionName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "serverless_function", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "serverless_function", state.FunctionName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -191,23 +177,9 @@ func (r *ServerlessFunctionResource) Update(ctx context.Context, req resource.Up
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
-		pType = plan.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.FunctionName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "serverless_function", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "serverless_function", plan.FunctionName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -217,12 +189,7 @@ func (r *ServerlessFunctionResource) Delete(ctx context.Context, req resource.De
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	pType := strings.ToLower(state.ProviderType.ValueString())
-	reg := ""
-	if !state.Region.IsNull() && !state.Region.IsUnknown() {
-		reg = state.Region.ValueString()
-	}
-	_ = adapters.DeleteCloudResource(ctx, pType, "serverless_function", state.FunctionName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "serverless_function", state.FunctionName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *ServerlessFunctionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
