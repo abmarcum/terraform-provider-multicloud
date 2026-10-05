@@ -99,7 +99,7 @@ func (r *NoSQLTableResource) Create(ctx context.Context, req resource.CreateRequ
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "nosql_table", plan.TableName.ValueString(), reg, nil)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "nosql_table", plan.TableName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -145,23 +145,9 @@ func (r *NoSQLTableResource) Read(ctx context.Context, req resource.ReadRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.TableName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "nosql_table", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "nosql_table", state.TableName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -171,23 +157,9 @@ func (r *NoSQLTableResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
-		pType = plan.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.TableName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "nosql_table", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "nosql_table", plan.TableName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -197,12 +169,7 @@ func (r *NoSQLTableResource) Delete(ctx context.Context, req resource.DeleteRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	pType := strings.ToLower(state.ProviderType.ValueString())
-	reg := ""
-	if !state.Region.IsNull() && !state.Region.IsUnknown() {
-		reg = state.Region.ValueString()
-	}
-	_ = adapters.DeleteCloudResource(ctx, pType, "nosql_table", state.TableName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "nosql_table", state.TableName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *NoSQLTableResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
