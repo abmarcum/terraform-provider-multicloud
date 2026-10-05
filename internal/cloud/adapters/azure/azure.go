@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,12 +45,36 @@ func getAzureResourceType(resType string) (string, string) {
 	}
 }
 
-func getAzureSubscriptionID() string {
+func getAzureSubscriptionID(attrs map[string]interface{}) string {
 	sub := os.Getenv("AZURE_SUBSCRIPTION_ID")
+	if sub == "" && attrs != nil {
+		if s, ok := attrs["azure_subscription_id"].(string); ok && s != "" {
+			sub = s
+		}
+	}
 	if sub == "" {
 		sub = "unconfigured-subscription-id"
 	}
 	return url.PathEscape(sub)
+}
+
+func getAzureResourceGroup(attrs map[string]interface{}) string {
+	if attrs != nil {
+		if rg, ok := attrs["azure_resource_group"].(string); ok && rg != "" {
+			return rg
+		}
+	}
+	return "multicloud-rg"
+}
+
+func getAzureBearerToken(attrs map[string]interface{}) string {
+	token := os.Getenv("AZURE_BEARER_TOKEN")
+	if token == "" && attrs != nil {
+		if t, ok := attrs["azure_bearer_token"].(string); ok && t != "" {
+			token = t
+		}
+	}
+	return token
 }
 
 func getAzureResourceURI(subID string, rg string, resType string, name string) string {
@@ -97,18 +122,18 @@ func getAzureVMHardwareSKU(sizeTier string, extraAttrs map[string]interface{}) s
 }
 
 func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
-	subscriptionID := getAzureSubscriptionID()
-	resourceGroup := "multicloud-rg"
+	subscriptionID := getAzureSubscriptionID(req.Attributes)
+	resourceGroup := getAzureResourceGroup(req.Attributes)
 	region := common.GetRegion(req.Region, "eastus")
 
-	if common.IsMockMode() {
+	if common.IsRequestMockMode(req) {
 		return common.ResourceResponse{
 			ID:     fmt.Sprintf("azure/%s/%s/%s", subscriptionID, resourceGroup, req.ResourceName),
 			Status: "SUCCEEDED",
 		}, nil
 	}
 
-	token := os.Getenv("AZURE_BEARER_TOKEN")
+	token := getAzureBearerToken(req.Attributes)
 	if token == "" {
 		return common.ResourceResponse{}, fmt.Errorf("Azure authentication error: AZURE_BEARER_TOKEN is not set")
 	}
@@ -161,7 +186,8 @@ func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRe
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return common.ResourceResponse{}, fmt.Errorf("Azure ARM API error (status %d) for %s", resp.StatusCode, req.ResourceName)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return common.ResourceResponse{}, fmt.Errorf("Azure ARM API error (status %d) for %s: %s", resp.StatusCode, req.ResourceName, common.SanitizeErrorBody(bodyBytes))
 	}
 
 	return common.ResourceResponse{
@@ -171,14 +197,14 @@ func (a *AzureAdapter) CreateResource(ctx context.Context, req common.ResourceRe
 }
 
 func (a *AzureAdapter) ReadResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
-	subscriptionID := getAzureSubscriptionID()
-	resourceGroup := "multicloud-rg"
+	subscriptionID := getAzureSubscriptionID(req.Attributes)
+	resourceGroup := getAzureResourceGroup(req.Attributes)
 
-	if common.IsMockMode() {
+	if common.IsRequestMockMode(req) {
 		return common.ResourceResponse{ID: req.ResourceName, Status: "SUCCEEDED"}, nil
 	}
 
-	token := os.Getenv("AZURE_BEARER_TOKEN")
+	token := getAzureBearerToken(req.Attributes)
 	if token == "" {
 		return common.ResourceResponse{}, fmt.Errorf("Azure authentication error: AZURE_BEARER_TOKEN is not set")
 	}
@@ -194,8 +220,12 @@ func (a *AzureAdapter) ReadResource(ctx context.Context, req common.ResourceRequ
 		return common.ResourceResponse{}, fmt.Errorf("Azure Read API request failed: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return common.ResourceResponse{}, fmt.Errorf("%w: Azure resource %s not found", common.ErrNotFound, req.ResourceName)
+	}
 	if resp.StatusCode >= 400 {
-		return common.ResourceResponse{}, fmt.Errorf("Azure resource %s read error (status %d)", req.ResourceName, resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return common.ResourceResponse{}, fmt.Errorf("Azure resource %s read error (status %d): %s", req.ResourceName, resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
 	}
 	return common.ResourceResponse{ID: req.ResourceName, Status: "SUCCEEDED"}, nil
 }
@@ -205,20 +235,32 @@ func (a *AzureAdapter) UpdateResource(ctx context.Context, req common.ResourceRe
 }
 
 func (a *AzureAdapter) DeleteResource(ctx context.Context, req common.ResourceRequest) error {
-	subscriptionID := getAzureSubscriptionID()
-	resourceGroup := "multicloud-rg"
+	if common.IsRequestMockMode(req) {
+		return nil
+	}
+
+	subscriptionID := getAzureSubscriptionID(req.Attributes)
+	resourceGroup := getAzureResourceGroup(req.Attributes)
+
+	token := getAzureBearerToken(req.Attributes)
+	if token == "" {
+		return fmt.Errorf("Azure authentication error: AZURE_BEARER_TOKEN is not set")
+	}
 
 	armEndpoint := getAzureResourceURI(subscriptionID, resourceGroup, req.ResourceType, req.ResourceName)
-	token := os.Getenv("AZURE_BEARER_TOKEN")
-	if token != "" {
-		httpReq, err := http.NewRequestWithContext(ctx, "DELETE", armEndpoint, nil)
-		if err == nil {
-			httpReq.Header.Set("Authorization", "Bearer "+token)
-			resp, err := common.HTTPClient.Do(httpReq)
-			if err == nil {
-				defer resp.Body.Close()
-			}
-		}
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", armEndpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create Azure Delete HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	resp, err := common.HTTPClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("Azure Delete API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("Azure resource %s delete error (status %d): %s", req.ResourceName, resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
 	}
 	return nil
 }
