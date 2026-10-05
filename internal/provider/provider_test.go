@@ -26,7 +26,16 @@ func TestProviderResourcesCount(t *testing.T) {
 	p := &MulticloudProvider{version: "0.1.0"}
 	resources := p.Resources(context.Background())
 
-	if len(resources) != 60 {
-		t.Errorf("expected 60 registered unified resources, got %d", len(resources))
+	if len(resources) != 70 {
+		t.Errorf("expected 70 registered unified resources, got %d", len(resources))
+	}
+}
+
+func TestProviderDataSourcesCount(t *testing.T) {
+	p := &MulticloudProvider{version: "0.1.0"}
+	dataSources := p.DataSources(context.Background())
+
+	if len(dataSources) != 2 {
+		t.Errorf("expected 2 registered data sources, got %d", len(dataSources))
 	}
 }
