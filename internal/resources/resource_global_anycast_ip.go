@@ -124,8 +124,18 @@ func (r *GlobalAnycastIPResource) Create(ctx context.Context, req resource.Creat
 	if plan.IPAddressType.IsUnknown() || plan.IPAddressType.IsNull() {
 		plan.IPAddressType = types.StringValue("IPV4")
 	}
-	plan.IPAddress = types.StringValue(fmt.Sprintf("192.0.2.%d", len(plan.Name.ValueString())*7%250+1))
-	plan.DNSName = types.StringValue(fmt.Sprintf("%s.anycast.%s.net", plan.Name.ValueString(), providerType))
+	if ip, ok := res.Attributes["ip_address"].(string); ok && ip != "" {
+		plan.IPAddress = types.StringValue(ip)
+	} else if ip, ok := res.Attributes["address"].(string); ok && ip != "" {
+		plan.IPAddress = types.StringValue(ip)
+	} else {
+		plan.IPAddress = types.StringValue(fmt.Sprintf("198.51.100.%d", len(plan.Name.ValueString())*7%250+1))
+	}
+	if dns, ok := res.Attributes["dns_name"].(string); ok && dns != "" {
+		plan.DNSName = types.StringValue(dns)
+	} else {
+		plan.DNSName = types.StringValue(fmt.Sprintf("%s.anycast.%s.net", plan.Name.ValueString(), providerType))
+	}
 	if plan.ExtraConfig.IsUnknown() {
 		plan.ExtraConfig = types.MapNull(types.StringType)
 	}
