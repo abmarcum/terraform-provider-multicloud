@@ -21,7 +21,7 @@ type ResourceMeta struct {
 
 func main() {
 	fmt.Println("======================================================================")
-	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (55 RESOURCES)")
+	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (60 RESOURCES)")
 	fmt.Println("======================================================================")
 
 	docsDir := "docs/resources"
