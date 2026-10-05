@@ -5,5 +5,5 @@ import (
 )
 
 func TestGenResources(t *testing.T) {
-	// Simple test assertion
+	main()
 }
