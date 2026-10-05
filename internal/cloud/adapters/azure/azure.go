@@ -215,7 +215,7 @@ func getAzureARMResourcePath(resType string, escName string) (string, string) {
 		return fmt.Sprintf("Microsoft.ApiManagement/service/%s", escName), "2022-08-01"
 	case "data_warehouse":
 		return fmt.Sprintf("Microsoft.Synapse/workspaces/%s", escName), "2021-06-01"
-	case "search_index":
+	case "search_index", "vector_index":
 		return fmt.Sprintf("Microsoft.Search/searchServices/%s", escName), "2022-09-01"
 	case "monitoring_dashboard":
 		return fmt.Sprintf("Microsoft.Portal/dashboards/%s", escName), "2020-09-01-preview"
@@ -235,6 +235,24 @@ func getAzureARMResourcePath(resType string, escName string) (string, string) {
 		return fmt.Sprintf("Microsoft.Security/pricings/%s", escName), "2023-01-01"
 	case "data_pipeline":
 		return fmt.Sprintf("Microsoft.DataFactory/factories/%s", escName), "2018-06-01"
+	case "block_volume":
+		return fmt.Sprintf("Microsoft.Compute/disks/%s", escName), "2023-04-02"
+	case "shared_filesystem":
+		return fmt.Sprintf("Microsoft.Storage/storageAccounts/%s", escName), "2023-01-01"
+	case "tls_certificate":
+		return fmt.Sprintf("Microsoft.Web/certificates/%s", escName), "2022-09-01"
+	case "workflow":
+		return fmt.Sprintf("Microsoft.Logic/workflows/%s", escName), "2019-05-01"
+	case "batch_compute":
+		return fmt.Sprintf("Microsoft.Batch/batchAccounts/%s", escName), "2023-05-01"
+	case "backup_vault":
+		return fmt.Sprintf("Microsoft.DataProtection/backupVaults/%s", escName), "2023-05-01"
+	case "distributed_tracing":
+		return fmt.Sprintf("Microsoft.Insights/components/%s", escName), "2020-02-02"
+	case "budget_alert":
+		return fmt.Sprintf("Microsoft.Consumption/budgets/%s", escName), "2023-05-01"
+	case "service_mesh":
+		return fmt.Sprintf("Microsoft.ContainerService/fleets/%s", escName), "2023-10-15"
 	default:
 		return fmt.Sprintf("Microsoft.Compute/virtualMachines/%s", escName), "2023-09-01"
 	}
