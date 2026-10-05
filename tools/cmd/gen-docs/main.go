@@ -21,7 +21,7 @@ type ResourceMeta struct {
 
 func main() {
 	fmt.Println("======================================================================")
-	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (60 RESOURCES)")
+	fmt.Println("  AUTOMATED TERRAFORM REGISTRY DOCUMENTATION GENERATOR (70 RESOURCES)")
 	fmt.Println("======================================================================")
 
 	docsDir := "docs/resources"
@@ -1555,6 +1555,267 @@ func main() {
 
   extra_config = {
     "aws_verify_mode" = "POINT_IN_TIME_CONSISTENT"
+  }
+}`,
+		},
+		{
+			Name:        "block_volume",
+			Category:    "Storage",
+			Description: "Unified Block Storage Volume supporting AWS EBS, GCP Persistent Disk, and Azure Managed Disk.",
+			AWS:         "aws_ebs_volume",
+			GCP:         "google_compute_disk",
+			Azure:       "azurerm_managed_disk",
+			HowItWorks:  "The `multicloud_block_volume` resource provisions persistent block storage volumes across AWS EBS (`gp3`/`io2`), GCP Persistent Disk (`pd-ssd`), and Azure Managed Disks (`Premium_LRS`).",
+			Attributes:  []string{"`volume_name` (String, Required) Name of the block storage volume.", "`size_gb` (Int64, Required) Volume capacity in gigabytes (GB).", "`volume_type` (String, Optional) Storage performance tier ('ssd', 'hdd', 'nvme').", "`iops` (Int64, Optional) Provisioned IOPS.", "`encryption_enabled` (Bool, Optional) Enable disk encryption at rest."},
+			BasicExample: `resource "multicloud_block_volume" "basic" {
+  provider_type      = "aws"
+  volume_name        = "app-data-volume"
+  size_gb            = 100
+  encryption_enabled = true
+}`,
+			AdvancedExample: `resource "multicloud_block_volume" "gcp_advanced" {
+  provider_type      = "gcp"
+  volume_name        = "db-nvme-disk"
+  size_gb            = 500
+  volume_type        = "ssd"
+  iops               = 15000
+  encryption_enabled = true
+
+  extra_config = {
+    "gcp_physical_block_size_bytes" = "4096"
+  }
+}`,
+		},
+		{
+			Name:        "shared_filesystem",
+			Category:    "Storage",
+			Description: "Unified Shared Network Filesystem supporting AWS EFS, GCP Cloud Filestore, and Azure Files.",
+			AWS:         "aws_efs_file_system",
+			GCP:         "google_filestore_instance",
+			Azure:       "azurerm_storage_share",
+			HowItWorks:  "The `multicloud_shared_filesystem` resource provisions elastic NFSv4 and SMB network file shares across AWS Elastic File System (EFS), GCP Cloud Filestore, and Azure Files.",
+			Attributes:  []string{"`filesystem_name` (String, Required) Name of the shared network filesystem.", "`protocol` (String, Optional) Network file sharing protocol ('NFSv4' or 'SMB').", "`performance_mode` (String, Optional) Throughput mode ('generalPurpose' or 'maxIO').", "`encryption_enabled` (Bool, Optional) Enable encryption at rest."},
+			BasicExample: `resource "multicloud_shared_filesystem" "basic" {
+  provider_type      = "aws"
+  filesystem_name    = "shared-assets-efs"
+  protocol           = "NFSv4"
+  encryption_enabled = true
+}`,
+			AdvancedExample: `resource "multicloud_shared_filesystem" "gcp_advanced" {
+  provider_type      = "gcp"
+  filesystem_name    = "filestore-ml-training"
+  performance_mode   = "maxIO"
+  encryption_enabled = true
+
+  extra_config = {
+    "gcp_tier" = "ENTERPRISE"
+  }
+}`,
+		},
+		{
+			Name:        "tls_certificate",
+			Category:    "Security",
+			Description: "Unified Managed SSL/TLS Certificate supporting AWS ACM, GCP Certificate Manager, and Azure Key Vault Certificates.",
+			AWS:         "aws_acm_certificate",
+			GCP:         "google_certificate_manager_certificate",
+			Azure:       "azurerm_key_vault_certificate",
+			HowItWorks:  "The `multicloud_tls_certificate` resource provisions and auto-renews managed X.509 SSL/TLS certificates across AWS Certificate Manager (ACM), GCP Certificate Manager, and Azure Key Vault Certificates.",
+			Attributes:  []string{"`cert_name` (String, Required) Identifier name of the managed TLS certificate.", "`domain_name` (String, Required) Primary FQDN domain name.", "`validation_method` (String, Optional) Domain validation method ('DNS' or 'EMAIL').", "`auto_renew` (Bool, Optional) Enable automated certificate renewal."},
+			BasicExample: `resource "multicloud_tls_certificate" "basic" {
+  provider_type     = "aws"
+  cert_name         = "prod-api-cert"
+  domain_name       = "api.example.com"
+  validation_method = "DNS"
+}`,
+			AdvancedExample: `resource "multicloud_tls_certificate" "gcp_advanced" {
+  provider_type     = "gcp"
+  cert_name         = "global-ingress-cert"
+  domain_name       = "app.example.com"
+  validation_method = "DNS"
+  auto_renew        = true
+
+  extra_config = {
+    "gcp_scope" = "EDGE_CACHE"
+  }
+}`,
+		},
+		{
+			Name:        "workflow",
+			Category:    "Compute",
+			Description: "Unified Serverless Workflow Orchestration supporting AWS Step Functions, GCP Workflows, and Azure Logic Apps.",
+			AWS:         "aws_sfn_state_machine",
+			GCP:         "google_workflows_workflow",
+			Azure:       "azurerm_logic_app_workflow",
+			HowItWorks:  "The `multicloud_workflow` resource deploys stateful serverless workflow state machines across AWS Step Functions, GCP Workflows, and Azure Logic Apps.",
+			Attributes:  []string{"`workflow_name` (String, Required) Name of the serverless workflow.", "`definition` (String, Required) Workflow state machine definition (JSON or YAML).", "`workflow_type` (String, Optional) Execution mode ('STANDARD' or 'EXPRESS')."},
+			BasicExample: `resource "multicloud_workflow" "basic" {
+  provider_type = "aws"
+  workflow_name = "order-fulfillment-sfn"
+  definition    = "{\"StartAt\":\"ProcessOrder\",\"States\":{\"ProcessOrder\":{\"Type\":\"Pass\",\"End\":true}}}"
+}`,
+			AdvancedExample: `resource "multicloud_workflow" "gcp_advanced" {
+  provider_type = "gcp"
+  workflow_name = "etl-orchestrator"
+  workflow_type = "STANDARD"
+  definition    = "main:\n  steps:\n    - init:\n        return: 'ok'"
+
+  extra_config = {
+    "gcp_call_log_level" = "LOG_ERRORS_ONLY"
+  }
+}`,
+		},
+		{
+			Name:        "batch_compute",
+			Category:    "Compute",
+			Description: "Unified Batch Compute Environment supporting AWS Batch, GCP Cloud Batch, and Azure Batch Pools.",
+			AWS:         "aws_batch_compute_environment",
+			GCP:         "google_batch_job",
+			Azure:       "azurerm_batch_pool",
+			HowItWorks:  "The `multicloud_batch_compute` resource provisions managed high-performance computing (HPC) and batch job execution pools across AWS Batch, GCP Cloud Batch, and Azure Batch.",
+			Attributes:  []string{"`environment_name` (String, Required) Name of the batch compute environment.", "`max_vcpus` (Int64, Required) Maximum vCPU capacity.", "`compute_type` (String, Optional) Provisioning model ('EC2', 'FARGATE', 'SPOT')."},
+			BasicExample: `resource "multicloud_batch_compute" "basic" {
+  provider_type    = "aws"
+  environment_name = "genomics-batch-pool"
+  max_vcpus        = 256
+}`,
+			AdvancedExample: `resource "multicloud_batch_compute" "azure_advanced" {
+  provider_type    = "azure"
+  environment_name = "rendering-spot-pool"
+  max_vcpus        = 512
+  compute_type     = "SPOT"
+
+  extra_config = {
+    "azure_inter_node_communication" = "Enabled"
+  }
+}`,
+		},
+		{
+			Name:        "backup_vault",
+			Category:    "Disaster Recovery",
+			Description: "Unified Disaster Recovery Backup Vault supporting AWS Backup, GCP Backup & DR, and Azure Data Protection Backup Vault.",
+			AWS:         "aws_backup_vault",
+			GCP:         "google_backup_dr_backup_vault",
+			Azure:       "azurerm_data_protection_backup_vault",
+			HowItWorks:  "The `multicloud_backup_vault` resource provisions encrypted, optionally WORM-locked backup vaults across AWS Backup, GCP Backup & DR Service, and Azure Data Protection.",
+			Attributes:  []string{"`vault_name` (String, Required) Name of the backup vault.", "`retention_days` (Int64, Optional) Recovery point retention in days.", "`immutable_lock` (Bool, Optional) Enable WORM immutable lock.", "`encryption_enabled` (Bool, Optional) Enable KMS encryption."},
+			BasicExample: `resource "multicloud_backup_vault" "basic" {
+  provider_type      = "aws"
+  vault_name         = "prod-compliance-vault"
+  retention_days     = 90
+  encryption_enabled = true
+}`,
+			AdvancedExample: `resource "multicloud_backup_vault" "gcp_advanced" {
+  provider_type      = "gcp"
+  vault_name         = "immutable-dr-vault"
+  retention_days     = 365
+  immutable_lock     = true
+  encryption_enabled = true
+
+  extra_config = {
+    "gcp_force_update" = "true"
+  }
+}`,
+		},
+		{
+			Name:        "distributed_tracing",
+			Category:    "Observability",
+			Description: "Unified Distributed Tracing & APM supporting AWS X-Ray, GCP Cloud Trace, and Azure Application Insights.",
+			AWS:         "aws_xray_sampling_rule",
+			GCP:         "google_cloud_trace_config",
+			Azure:       "azurerm_application_insights",
+			HowItWorks:  "The `multicloud_distributed_tracing` resource configures end-to-end distributed request tracing and sampling policies across AWS X-Ray, GCP Cloud Trace, and Azure Application Insights.",
+			Attributes:  []string{"`tracing_name` (String, Required) Name of the tracing rule or APM workspace.", "`sampling_rate` (Float64, Optional) Trace sampling ratio (0.0 to 1.0).", "`retention_days` (Int64, Optional) Span retention duration in days."},
+			BasicExample: `resource "multicloud_distributed_tracing" "basic" {
+  provider_type = "aws"
+  tracing_name  = "checkout-xray-sampling"
+  sampling_rate = 0.10
+}`,
+			AdvancedExample: `resource "multicloud_distributed_tracing" "azure_advanced" {
+  provider_type  = "azure"
+  tracing_name   = "prod-app-insights"
+  sampling_rate  = 0.25
+  retention_days = 90
+
+  extra_config = {
+    "azure_application_type" = "web"
+  }
+}`,
+		},
+		{
+			Name:        "budget_alert",
+			Category:    "FinOps",
+			Description: "Unified FinOps Cost Budget & Alert Policy supporting AWS Budgets, GCP Billing Budgets, and Azure Consumption Budgets.",
+			AWS:         "aws_budgets_budget",
+			GCP:         "google_billing_budget",
+			Azure:       "azurerm_consumption_budget_subscription",
+			HowItWorks:  "The `multicloud_budget_alert` resource configures monthly spend limits and automated threshold notifications across AWS Budgets, GCP Cloud Billing Budgets, and Azure Consumption Budgets.",
+			Attributes:  []string{"`budget_name` (String, Required) Name of the monthly cost budget.", "`monthly_limit_usd` (Float64, Required) Monthly spend limit in USD.", "`alert_threshold_pct` (Int64, Optional) Alert threshold percentage.", "`notification_email` (String, Optional) Email recipient for budget alerts."},
+			BasicExample: `resource "multicloud_budget_alert" "basic" {
+  provider_type       = "aws"
+  budget_name         = "platform-monthly-budget"
+  monthly_limit_usd   = 5000.00
+  alert_threshold_pct = 80
+}`,
+			AdvancedExample: `resource "multicloud_budget_alert" "gcp_advanced" {
+  provider_type       = "gcp"
+  budget_name         = "ai-cluster-spend-cap"
+  monthly_limit_usd   = 12000.00
+  alert_threshold_pct = 90
+  notification_email  = "finops@example.com"
+
+  extra_config = {
+    "gcp_credit_types_treatment" = "INCLUDE_ALL_CREDITS"
+  }
+}`,
+		},
+		{
+			Name:        "vector_index",
+			Category:    "Analytics",
+			Description: "Unified AI Vector Database Index supporting AWS OpenSearch Vector Engine, GCP Vertex AI Vector Search, and Azure AI Search.",
+			AWS:         "aws_opensearchserverless_collection",
+			GCP:         "google_vertex_ai_index",
+			Azure:       "azurerm_search_service",
+			HowItWorks:  "The `multicloud_vector_index` resource provisions high-dimensional vector similarity search indexes for RAG and LLM embeddings across AWS OpenSearch Vector Engine, GCP Vertex AI Vector Search, and Azure AI Search.",
+			Attributes:  []string{"`index_name` (String, Required) Name of the vector search index.", "`dimensions` (Int64, Required) Vector embedding dimensionality (e.g., 768, 1536).", "`distance_metric` (String, Optional) Similarity metric ('COSINE', 'DOT_PRODUCT', 'EUCLIDEAN')."},
+			BasicExample: `resource "multicloud_vector_index" "basic" {
+  provider_type   = "gcp"
+  index_name      = "rag-embeddings-index"
+  dimensions      = 1536
+  distance_metric = "COSINE"
+}`,
+			AdvancedExample: `resource "multicloud_vector_index" "aws_advanced" {
+  provider_type   = "aws"
+  index_name      = "knowledge-base-vectors"
+  dimensions      = 3072
+  distance_metric = "DOT_PRODUCT"
+
+  extra_config = {
+    "aws_standby_replicas" = "ENABLED"
+  }
+}`,
+		},
+		{
+			Name:        "service_mesh",
+			Category:    "Networking",
+			Description: "Unified Service Mesh Control Plane supporting AWS App Mesh, GCP Cloud Service Mesh, and Azure Kubernetes Fleet Service Mesh.",
+			AWS:         "aws_appmesh_mesh",
+			GCP:         "google_network_services_mesh",
+			Azure:       "azurerm_kubernetes_fleet_manager",
+			HowItWorks:  "The `multicloud_service_mesh` resource provisions zero-trust L7 service mesh control planes with mTLS and egress filtering across AWS App Mesh, GCP Cloud Service Mesh, and Azure Fleet Service Mesh.",
+			Attributes:  []string{"`mesh_name` (String, Required) Name of the service mesh control plane.", "`mtls_mode` (String, Optional) Mutual TLS policy ('STRICT' or 'PERMISSIVE').", "`egress_filter` (String, Optional) Outbound traffic filter ('ALLOW_ALL' or 'DROP_ALL')."},
+			BasicExample: `resource "multicloud_service_mesh" "basic" {
+  provider_type = "aws"
+  mesh_name     = "prod-microservices-mesh"
+  mtls_mode     = "STRICT"
+}`,
+			AdvancedExample: `resource "multicloud_service_mesh" "gcp_advanced" {
+  provider_type = "gcp"
+  mesh_name     = "global-zero-trust-mesh"
+  mtls_mode     = "STRICT"
+  egress_filter = "DROP_ALL"
+
+  extra_config = {
+    "gcp_interception_port" = "15001"
   }
 }`,
 		},
