@@ -15,7 +15,7 @@ Reads upstream state and metadata attributes for an existing cloud resource acro
 data "multicloud_resource" "existing_bucket" {
   provider_type = "aws"
   resource_type = "storage_bucket"
-  resource_name = "company-shared-assets"
+  name          = "company-shared-assets"
   region        = "us-west-2"
 }
 
@@ -27,14 +27,13 @@ output "bucket_status" {
 ## Schema Attributes
 
 ### Required
+- `name` (String) Name of the cloud resource to look up.
 - `provider_type` (String) Target cloud provider (`'aws'`, `'gcp'`, or `'azure'`).
 - `resource_type` (String) Unified resource type (e.g., `'storage_bucket'`, `'virtual_machine'`, `'db_instance'`).
-- `resource_name` (String) Upstream identifier or name of the cloud resource.
 
 ### Optional
 - `region` (String) Target cloud region.
 
 ### Read-Only
-- `id` (String) Resolved cloud resource identifier.
-- `status` (String) Upstream cloud resource status (`'ACTIVE'`, `'RUNNING'`, `'SUCCEEDED'`).
-- `attributes` (Map[String]) Key-value attributes returned by the cloud provider.
+- `id` (String) Cloud-native identifier of the queried resource.
+- `status` (String) Current lifecycle status of the cloud resource (`'ACTIVE'`, `'RUNNING'`, `'SUCCEEDED'`).
