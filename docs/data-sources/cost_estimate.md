@@ -19,11 +19,11 @@ data "multicloud_cost_estimate" "vm_cost" {
 }
 
 output "estimated_monthly_usd" {
-  value = data.multicloud_cost_estimate.vm_cost.monthly_cost
+  value = data.multicloud_cost_estimate.vm_cost.monthly_cost_usd
 }
 
 output "arm64_recommendation" {
-  value = data.multicloud_cost_estimate.vm_cost.optimization_note
+  value = data.multicloud_cost_estimate.vm_cost.suggested_tier
 }
 ```
 
@@ -34,11 +34,10 @@ output "arm64_recommendation" {
 - `resource_type` (String) Unified resource type (e.g., `'virtual_machine'`, `'kubernetes_cluster'`, `'db_instance'`).
 
 ### Optional
-- `size_tier` (String) Resource size tier (`'small'`, `'medium'`, `'large'`) or explicit SKU (`'m6i.large'`).
+- `size_tier` (String) Instance size tier (`'small'`, `'medium'`, `'large'`).
 
 ### Read-Only
-- `id` (String) Cost estimate identifier.
-- `monthly_cost` (Float64) Estimated monthly spend in USD.
-- `suggested_tier` (String) Recommended Arm64 instance SKU when applicable.
-- `estimated_saving` (Float64) Estimated monthly USD savings from Arm64 migration.
-- `optimization_note` (String) Actionable FinOps recommendation summary.
+- `id` (String) Unique identifier for the cost estimate query.
+- `monthly_cost_usd` (Float64) Estimated monthly cost in USD.
+- `suggested_tier` (String) Recommended ARM/Graviton/Tau/Ampere instance tier if applicable.
+- `estimated_saving_usd` (Float64) Estimated monthly savings in USD when switching to the suggested tier.
