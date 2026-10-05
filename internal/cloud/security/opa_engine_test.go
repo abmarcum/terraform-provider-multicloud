@@ -1,6 +1,8 @@
 package security
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -31,5 +33,52 @@ func TestEvaluateOPARegoPolicy(t *testing.T) {
 	if !res.Passed {
 		t.Errorf("expected disallow_public_ip to pass when associate_public_ip is false")
 	}
+
+	// 4. Test require_encryption and require_multi_az
+	res = EvaluateOPARegoPolicyWithAttrs("aws", "multicloud_storage_bucket", "unenc-bucket", "require_encryption", map[string]interface{}{
+		"encryption_enabled": false,
+	})
+	if res.Passed {
+		t.Errorf("expected require_encryption to fail when encryption_enabled is false")
+	}
+
+	res = EvaluateOPARegoPolicyWithAttrs("aws", "multicloud_db_instance", "single-az-db", "require_multi_az", map[string]interface{}{
+		"multi_az": false,
+	})
+	if res.Passed {
+		t.Errorf("expected require_multi_az to fail when multi_az is false")
+	}
 }
 
+func TestEvaluateRegoModuleAndPolicyPath(t *testing.T) {
+	regoSrc := `
+package multicloud.compliance
+
+deny[msg] {
+    input.resource_type == "multicloud_storage_bucket"
+    input.encryption_enabled == false
+    msg := "Custom Rego policy: storage buckets must enable encryption"
+}
+`
+	res := EvaluateRegoModule(regoSrc, map[string]interface{}{
+		"resource_type":      "multicloud_storage_bucket",
+		"encryption_enabled": false,
+	})
+	if res.Passed {
+		t.Fatalf("expected custom Rego deny rule to trigger violation")
+	}
+
+	tmpDir := t.TempDir()
+	policyFile := filepath.Join(tmpDir, "policy.rego")
+	if err := os.WriteFile(policyFile, []byte(regoSrc), 0600); err != nil {
+		t.Fatalf("failed to write temp rego file: %v", err)
+	}
+	t.Setenv("OPA_POLICY_PATH", policyFile)
+
+	res = EvaluateOPARegoPolicyWithAttrs("aws", "multicloud_storage_bucket", "test-bkt", "custom_rule", map[string]interface{}{
+		"encryption_enabled": false,
+	})
+	if res.Passed {
+		t.Errorf("expected OPA_POLICY_PATH evaluation to fail on unencrypted bucket")
+	}
+}
