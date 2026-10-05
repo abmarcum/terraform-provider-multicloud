@@ -165,6 +165,16 @@ func (p *MulticloudProvider) Resources(ctx context.Context) []func() resource.Re
 		resources.NewStorageInventoryReportResource,
 		resources.NewWorkloadIdentityPoolResource,
 		resources.NewStorageTransferJobResource,
+		resources.NewBlockVolumeResource,
+		resources.NewSharedFilesystemResource,
+		resources.NewTLSCertificateResource,
+		resources.NewWorkflowResource,
+		resources.NewBatchComputeResource,
+		resources.NewBackupVaultResource,
+		resources.NewDistributedTracingResource,
+		resources.NewBudgetAlertResource,
+		resources.NewVectorIndexResource,
+		resources.NewServiceMeshResource,
 	}
 }
 
