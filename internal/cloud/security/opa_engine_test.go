@@ -56,12 +56,11 @@ package multicloud.compliance
 
 deny[msg] {
     input.resource_type == "multicloud_storage_bucket"
-    input.encryption_enabled == false
+    input.attributes.encryption_enabled == false
     msg := "Custom Rego policy: storage buckets must enable encryption"
 }
 `
-	res := EvaluateRegoModule(regoSrc, map[string]interface{}{
-		"resource_type":      "multicloud_storage_bucket",
+	res := EvaluateRegoModule("aws", "multicloud_storage_bucket", "test-bkt", regoSrc, map[string]interface{}{
 		"encryption_enabled": false,
 	})
 	if res.Passed {
