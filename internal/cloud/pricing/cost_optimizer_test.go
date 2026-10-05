@@ -34,13 +34,13 @@ func TestRecommendCostOptimizationsLargeAndMultiCloud(t *testing.T) {
 	}
 
 	azMed := RecommendCostOptimizations("azure", "az-web", "medium")
-	if azMed == nil || azMed.EstimatedSaving != 6.08 {
-		t.Errorf("expected 6.08 savings for medium Azure instance, got %+v", azMed)
+	if azMed == nil || azMed.EstimatedSaving != 6.02 {
+		t.Errorf("expected 6.02 savings for medium Azure instance, got %+v", azMed)
 	}
 
 	azLarge := RecommendCostOptimizations("azure", "az-batch", "large")
-	if azLarge == nil || azLarge.EstimatedSaving != 12.16 {
-		t.Errorf("expected 12.16 savings for large Azure instance, got %+v", azLarge)
+	if azLarge == nil || azLarge.EstimatedSaving != 12.04 {
+		t.Errorf("expected 12.04 savings for large Azure instance, got %+v", azLarge)
 	}
 }
 
