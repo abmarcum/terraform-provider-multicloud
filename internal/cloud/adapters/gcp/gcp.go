@@ -209,7 +209,7 @@ func getGCPServiceEndpoint(project string, region string, resType string, name s
 	case "app_config":
 		endpoint = fmt.Sprintf("https://runtimeconfig.googleapis.com/v1beta1/projects/%s/configs", escProject)
 		payload, _ = json.Marshal(map[string]interface{}{"name": fmt.Sprintf("projects/%s/configs/%s", project, name)})
-	case "ai_endpoint", "feature_store":
+	case "ai_endpoint", "feature_store", "vector_index":
 		endpoint = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/endpoints", escRegion, escProject, escRegion)
 		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
 	case "streaming_cluster":
@@ -220,6 +220,33 @@ func getGCPServiceEndpoint(project string, region string, resType string, name s
 		payload, _ = json.Marshal(map[string]interface{}{"filter": "severity=\"HIGH\""})
 	case "data_pipeline":
 		endpoint = fmt.Sprintf("https://dataflow.googleapis.com/v1b3/projects/%s/locations/%s/jobs", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "block_volume":
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/disks", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "sizeGb": "100"})
+	case "shared_filesystem":
+		endpoint = fmt.Sprintf("https://file.googleapis.com/v1/projects/%s/locations/%s-a/instances?instanceId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"tier": "BASIC_HDD"})
+	case "tls_certificate":
+		endpoint = fmt.Sprintf("https://certificatemanager.googleapis.com/v1/projects/%s/locations/global/certificates?certificateId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "workflow":
+		endpoint = fmt.Sprintf("https://workflows.googleapis.com/v1/projects/%s/locations/%s/workflows?workflowId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "batch_compute":
+		endpoint = fmt.Sprintf("https://batch.googleapis.com/v1/projects/%s/locations/%s/jobs?jobId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "backup_vault":
+		endpoint = fmt.Sprintf("https://backupdr.googleapis.com/v1/projects/%s/locations/%s/backupVaults?backupVaultId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "distributed_tracing":
+		endpoint = fmt.Sprintf("https://cloudtrace.googleapis.com/v2/projects/%s/traces:batchWrite", escProject)
+		payload = []byte(`{"spans":[]}`)
+	case "budget_alert":
+		endpoint = "https://billingbudgets.googleapis.com/v1/billingAccounts/default/budgets"
+		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
+	case "service_mesh":
+		endpoint = fmt.Sprintf("https://networkservices.googleapis.com/v1/projects/%s/locations/global/meshes?meshId=%s", escProject, escQueryName)
 		payload, _ = json.Marshal(map[string]interface{}{"name": name})
 	default:
 		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances", escProject, escRegion)
