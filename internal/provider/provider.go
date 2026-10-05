@@ -169,5 +169,9 @@ func (p *MulticloudProvider) Resources(ctx context.Context) []func() resource.Re
 }
 
 func (p *MulticloudProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		resources.NewCloudResourceDataSource,
+		resources.NewCostEstimateDataSource,
+	}
 }
+
