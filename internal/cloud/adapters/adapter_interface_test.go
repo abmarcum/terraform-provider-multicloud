@@ -41,4 +41,14 @@ func TestCloudAdapters(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected Azure adapter create in live mode without credentials to return authentication error")
 	}
+
+	// 3. Test Pre-Apply Secret Leak Prevention in CreateCloudResource
+	t.Setenv("MULTICLOUD_MOCK_MODE", "true")
+	_, err = CreateCloudResource(ctx, "aws", "storage_bucket", "my-bucket", "us-west-2", map[string]interface{}{
+		"leaked_key": "AKIAIOSFODNN7EXAMPLE",
+	})
+	if err == nil {
+		t.Errorf("expected CreateCloudResource to reject attribute containing leaked AWS access key")
+	}
 }
+
