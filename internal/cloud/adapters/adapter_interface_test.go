@@ -45,10 +45,10 @@ func TestCloudAdapters(t *testing.T) {
 	// 3. Test Pre-Apply Secret Leak Prevention in CreateCloudResource
 	t.Setenv("MULTICLOUD_MOCK_MODE", "true")
 	_, err = CreateCloudResource(ctx, "aws", "storage_bucket", "my-bucket", "us-west-2", map[string]interface{}{
-		"leaked_key": "AKIAIOSFODNN7EXAMPLE",
+		"leaked_key": "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 	})
 	if err == nil {
-		t.Errorf("expected CreateCloudResource to reject attribute containing leaked AWS access key")
+		t.Errorf("expected CreateCloudResource to reject attribute containing leaked AWS secret access key")
 	}
 }
 
