@@ -2,11 +2,14 @@ package security
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-// OPARuleResult models OPA Rego policy validation findings
-type OPARuleResult struct {
+// OPAPolicyResult represents Open Policy Agent Rego evaluation results
+type OPAPolicyResult struct {
 	ResourceName string
 	ProviderType string
 	PolicyRule   string
@@ -14,71 +17,242 @@ type OPARuleResult struct {
 	Violation    string
 }
 
-// EvaluateOPARegoPolicy evaluates resource configuration against custom Rego policy rules
-func EvaluateOPARegoPolicy(providerType string, resourceType string, resourceName string, regoPolicyRules string) OPARuleResult {
-	return EvaluateOPARegoPolicyWithAttrs(providerType, resourceType, resourceName, regoPolicyRules, nil)
+var (
+	regoDenyRuleRegex = regexp.MustCompile(`(?s)(?:deny|violation)\s*\[\s*([a-zA-Z0-9_"]+)\s*\]\s*(?:if\s*)?\{\s*(.*?)\s*\}`)
+	regoAssignMsgRe   = regexp.MustCompile(`^\s*[a-zA-Z0-9_]+\s*:=\s*"([^"]+)"\s*$`)
+	regoEqRe          = regexp.MustCompile(`^\s*input\.([a-zA-Z0-9_.]+)\s*==\s*(.+?)\s*$`)
+	regoNeqRe         = regexp.MustCompile(`^\s*input\.([a-zA-Z0-9_.]+)\s*!=\s*(.+?)\s*$`)
+	regoNotRe         = regexp.MustCompile(`^\s*not\s+input\.([a-zA-Z0-9_.]+)\s*$`)
+	regoCountZeroRe   = regexp.MustCompile(`^\s*count\(\s*input\.([a-zA-Z0-9_.]+)\s*\)\s*==\s*0\s*$`)
+)
+
+// EvaluateOPARegoPolicy evaluates unified resource attributes against Open Policy Agent (OPA) Rego rules
+func EvaluateOPARegoPolicy(providerType string, resourceType string, resourceName string, regoRule string) OPAPolicyResult {
+	return EvaluateOPARegoPolicyWithAttrs(providerType, resourceType, resourceName, regoRule, nil)
 }
 
-// EvaluateOPARegoPolicyWithAttrs evaluates resource configuration and attributes against custom Rego policy rules
-func EvaluateOPARegoPolicyWithAttrs(providerType string, resourceType string, resourceName string, regoPolicyRules string, attrs map[string]interface{}) OPARuleResult {
-	p := strings.ToLower(providerType)
-	r := strings.ToLower(resourceType)
+// EvaluateOPARegoPolicyWithAttrs evaluates unified resource attributes against Open Policy Agent (OPA) Rego rules or inline Rego modules
+func EvaluateOPARegoPolicyWithAttrs(providerType string, resourceType string, resourceName string, regoRule string, attributes map[string]interface{}) OPAPolicyResult {
+	p := strings.ToUpper(providerType)
 
-	// Rego Rule 1: Mandatory Environment Tagging
-	if strings.Contains(regoPolicyRules, "must_have_tags") {
-		if attrs != nil {
-			hasTags := false
-			switch t := attrs["tags"].(type) {
-			case map[string]string:
-				hasTags = len(t) > 0
-			case map[string]interface{}:
-				hasTags = len(t) > 0
+	// Support inline Rego module or external .rego policy file
+	if strings.Contains(regoRule, "package ") || strings.Contains(regoRule, "deny[") || strings.Contains(regoRule, "violation[") {
+		return EvaluateRegoModule(providerType, resourceType, resourceName, regoRule, attributes)
+	}
+	if policyPath := os.Getenv("OPA_POLICY_PATH"); policyPath != "" {
+		/* #nosec G304 */
+		if data, err := os.ReadFile(filepath.Clean(policyPath)); err == nil && len(data) > 0 {
+			res := EvaluateRegoModule(providerType, resourceType, resourceName, string(data), attributes)
+			if !res.Passed {
+				return res
 			}
-			if !hasTags {
-				return OPARuleResult{
-					ResourceName: resourceName,
-					ProviderType: providerType,
-					PolicyRule:   "rego.mandatory_tagging",
-					Passed:       false,
-					Violation:    fmt.Sprintf("[OPA Rego Policy Violation] Resource '%s' on %s is missing mandatory tags.", resourceName, strings.ToUpper(p)),
+		}
+	}
+
+	switch regoRule {
+	case "must_have_tags":
+		if attributes != nil {
+			if tags, exists := attributes["tags"]; exists {
+				switch t := tags.(type) {
+				case map[string]string:
+					if len(t) == 0 {
+						return OPAPolicyResult{
+							ResourceName: resourceName,
+							ProviderType: providerType,
+							PolicyRule:   regoRule,
+							Passed:       false,
+							Violation:    fmt.Sprintf("[%s OPA Engine] Rego Policy Violation ('%s'): Resource '%s' has an empty tags map.", p, regoRule, resourceName),
+						}
+					}
+				case map[string]interface{}:
+					if len(t) == 0 {
+						return OPAPolicyResult{
+							ResourceName: resourceName,
+							ProviderType: providerType,
+							PolicyRule:   regoRule,
+							Passed:       false,
+							Violation:    fmt.Sprintf("[%s OPA Engine] Rego Policy Violation ('%s'): Resource '%s' has an empty tags map.", p, regoRule, resourceName),
+						}
+					}
+				case nil:
+					return OPAPolicyResult{
+						ResourceName: resourceName,
+						ProviderType: providerType,
+						PolicyRule:   regoRule,
+						Passed:       false,
+						Violation:    fmt.Sprintf("[%s OPA Engine] Rego Policy Violation ('%s'): Resource '%s' is missing required tags.", p, regoRule, resourceName),
+					}
 				}
 			}
 		}
-		return OPARuleResult{
-			ResourceName: resourceName,
-			ProviderType: providerType,
-			PolicyRule:   "rego.mandatory_tagging",
-			Passed:       true,
-			Violation:    "",
-		}
-	}
 
-	// Rego Rule 2: Multi-Cloud Region / Public IP Restrictions
-	if strings.Contains(regoPolicyRules, "disallow_public_ip") {
-		publicRequested := true
-		if attrs != nil {
-			if pub, ok := attrs["associate_public_ip"].(bool); ok {
-				publicRequested = pub
-			} else if pub, ok := attrs["is_public"].(bool); ok {
-				publicRequested = pub
+	case "disallow_public_ip":
+		if strings.Contains(resourceType, "virtual_machine") {
+			if attributes != nil {
+				if pub, ok := attributes["associate_public_ip"].(bool); ok && !pub {
+					break
+				}
+				if pub, ok := attributes["is_public"].(bool); ok && !pub {
+					break
+				}
 			}
-		}
-		if strings.Contains(r, "virtual_machine") && publicRequested {
-			return OPARuleResult{
+			return OPAPolicyResult{
 				ResourceName: resourceName,
 				ProviderType: providerType,
-				PolicyRule:   "rego.disallow_public_ip",
+				PolicyRule:   regoRule,
 				Passed:       false,
-				Violation:    fmt.Sprintf("[OPA Rego Policy Violation] Resource '%s' on %s violates zero-public-ip policy.", resourceName, strings.ToUpper(p)),
+				Violation:    fmt.Sprintf("[%s OPA Engine] Rego Policy Violation ('%s'): Virtual Machine '%s' cannot allocate a public IP in production.", p, regoRule, resourceName),
+			}
+		}
+
+	case "require_encryption":
+		if attributes != nil {
+			if enc, ok := attributes["encryption_enabled"].(bool); ok && !enc {
+				return OPAPolicyResult{
+					ResourceName: resourceName,
+					ProviderType: providerType,
+					PolicyRule:   regoRule,
+					Passed:       false,
+					Violation:    fmt.Sprintf("[%s OPA Engine] Rego Policy Violation ('%s'): Resource '%s' must enable encryption at rest.", p, regoRule, resourceName),
+				}
+			}
+		}
+
+	case "require_multi_az":
+		if strings.Contains(resourceType, "db_instance") && attributes != nil {
+			if multiAZ, ok := attributes["multi_az"].(bool); ok && !multiAZ {
+				return OPAPolicyResult{
+					ResourceName: resourceName,
+					ProviderType: providerType,
+					PolicyRule:   regoRule,
+					Passed:       false,
+					Violation:    fmt.Sprintf("[%s OPA Engine] Rego Policy Violation ('%s'): Database '%s' must enable Multi-AZ high availability.", p, regoRule, resourceName),
+				}
 			}
 		}
 	}
 
-	return OPARuleResult{
+	return OPAPolicyResult{
 		ResourceName: resourceName,
 		ProviderType: providerType,
-		PolicyRule:   "rego.default_pass",
+		PolicyRule:   regoRule,
 		Passed:       true,
 		Violation:    "",
 	}
+}
+
+// EvaluateRegoModule parses and evaluates Rego deny/violation rules against a resource input document
+func EvaluateRegoModule(providerType, resourceType, resourceName, regoModule string, attributes map[string]interface{}) OPAPolicyResult {
+	input := map[string]interface{}{
+		"provider":      strings.ToLower(providerType),
+		"resource_type": resourceType,
+		"resource_name": resourceName,
+		"attributes":    attributes,
+	}
+
+	matches := regoDenyRuleRegex.FindAllStringSubmatch(regoModule, -1)
+	for _, m := range matches {
+		headArg := strings.Trim(m[1], `"`)
+		body := m[2]
+		lines := strings.Split(body, "\n")
+
+		allTrue := true
+		violationMsg := headArg
+		for _, rawLine := range lines {
+			line := strings.TrimSpace(rawLine)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			if assign := regoAssignMsgRe.FindStringSubmatch(line); len(assign) == 2 {
+				violationMsg = assign[1]
+				continue
+			}
+			if !evalRegoCondition(line, input) {
+				allTrue = false
+				break
+			}
+		}
+
+		if allTrue {
+			return OPAPolicyResult{
+				ResourceName: resourceName,
+				ProviderType: providerType,
+				PolicyRule:   "rego_module",
+				Passed:       false,
+				Violation:    fmt.Sprintf("[%s OPA Engine] %s", strings.ToUpper(providerType), violationMsg),
+			}
+		}
+	}
+
+	return OPAPolicyResult{
+		ResourceName: resourceName,
+		ProviderType: providerType,
+		PolicyRule:   "rego_module",
+		Passed:       true,
+	}
+}
+
+func resolveInputPath(input map[string]interface{}, dotPath string) (interface{}, bool) {
+	parts := strings.Split(dotPath, ".")
+	var curr interface{} = input
+	for _, p := range parts {
+		m, ok := curr.(map[string]interface{})
+		if !ok || m == nil {
+			return nil, false
+		}
+		curr, ok = m[p]
+		if !ok {
+			return nil, false
+		}
+	}
+	return curr, true
+}
+
+func evalRegoCondition(expr string, input map[string]interface{}) bool {
+	if m := regoCountZeroRe.FindStringSubmatch(expr); len(m) == 2 {
+		val, ok := resolveInputPath(input, m[1])
+		if !ok || val == nil {
+			return true
+		}
+		switch v := val.(type) {
+		case map[string]string:
+			return len(v) == 0
+		case map[string]interface{}:
+			return len(v) == 0
+		case []interface{}:
+			return len(v) == 0
+		}
+		return false
+	}
+
+	if m := regoNotRe.FindStringSubmatch(expr); len(m) == 2 {
+		val, ok := resolveInputPath(input, m[1])
+		if !ok || val == nil {
+			return true
+		}
+		if b, ok := val.(bool); ok {
+			return !b
+		}
+		return false
+	}
+
+	if m := regoEqRe.FindStringSubmatch(expr); len(m) == 3 {
+		val, ok := resolveInputPath(input, m[1])
+		if !ok {
+			return false
+		}
+		rhs := strings.Trim(m[2], `"`)
+		return fmt.Sprintf("%v", val) == rhs
+	}
+
+	if m := regoNeqRe.FindStringSubmatch(expr); len(m) == 3 {
+		val, ok := resolveInputPath(input, m[1])
+		if !ok {
+			return true
+		}
+		rhs := strings.Trim(m[2], `"`)
+		return fmt.Sprintf("%v", val) != rhs
+	}
+
+	return false
 }
