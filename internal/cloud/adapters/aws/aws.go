@@ -123,6 +123,24 @@ func awsServiceNameForResource(resType string) string {
 		return "globalaccelerator"
 	case "load_balancer":
 		return "elasticloadbalancing"
+	case "shared_filesystem":
+		return "elasticfilesystem"
+	case "tls_certificate":
+		return "acm"
+	case "workflow":
+		return "states"
+	case "batch_compute":
+		return "batch"
+	case "backup_vault":
+		return "backup"
+	case "distributed_tracing":
+		return "xray"
+	case "budget_alert":
+		return "budgets"
+	case "vector_index":
+		return "aoss"
+	case "service_mesh":
+		return "appmesh"
 	default:
 		return "ec2"
 	}
@@ -195,6 +213,8 @@ func getAWSServiceEndpoint(region string, resType string, name string) (string, 
 		method = "PUT"
 	case "virtual_machine", "custom_machine_type", "bastion_host":
 		endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com/?Action=RunInstances&ImageId=ami-0c55b159cbfafe1f0&InstanceType=m6i.large&MinCount=1&MaxCount=1&Version=2016-11-15", escRegion)
+	case "block_volume":
+		endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com/?Action=CreateVolume&AvailabilityZone=%sa&Size=100&VolumeType=gp3&Version=2016-11-15", escRegion, escRegion)
 	case "virtual_network", "vpc_peering":
 		endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com/?Action=CreateVpc&CidrBlock=10.0.0.0/16&Version=2016-11-15", escRegion)
 	case "subnet":
@@ -261,7 +281,7 @@ func getAWSServiceEndpoint(region string, resType string, name string) (string, 
 		payload, _ = json.Marshal(map[string]string{"name": name, "authenticationType": "API_KEY"})
 	case "data_warehouse":
 		endpoint = fmt.Sprintf("https://redshift.%s.amazonaws.com/?Action=CreateCluster&ClusterIdentifier=%s&NodeType=ra3.xlplus&Version=2012-12-01", escRegion, escQueryName)
-	case "search_index":
+	case "search_index", "vector_index":
 		endpoint = fmt.Sprintf("https://es.%s.amazonaws.com/2021-01-01/opensearch/domain", escRegion)
 		payload, _ = json.Marshal(map[string]string{"DomainName": name})
 	case "auto_scaling_group":
@@ -295,6 +315,31 @@ func getAWSServiceEndpoint(region string, resType string, name string) (string, 
 	case "global_anycast_ip":
 		endpoint = "https://globalaccelerator.us-west-2.amazonaws.com"
 		payload, _ = json.Marshal(map[string]string{"Name": name, "IpAddressType": "IPV4"})
+	case "shared_filesystem":
+		endpoint = fmt.Sprintf("https://elasticfilesystem.%s.amazonaws.com/2015-02-01/file-systems", escRegion)
+		payload, _ = json.Marshal(map[string]string{"CreationToken": name})
+	case "tls_certificate":
+		endpoint = fmt.Sprintf("https://acm.%s.amazonaws.com", escRegion)
+		payload, _ = json.Marshal(map[string]string{"DomainName": name})
+	case "workflow":
+		endpoint = fmt.Sprintf("https://states.%s.amazonaws.com", escRegion)
+		payload, _ = json.Marshal(map[string]string{"name": name})
+	case "batch_compute":
+		endpoint = fmt.Sprintf("https://batch.%s.amazonaws.com/v1/createcomputeenvironment", escRegion)
+		payload, _ = json.Marshal(map[string]string{"computeEnvironmentName": name})
+	case "backup_vault":
+		endpoint = fmt.Sprintf("https://backup.%s.amazonaws.com/backup-vaults/%s", escRegion, escName)
+		method = "PUT"
+	case "distributed_tracing":
+		endpoint = fmt.Sprintf("https://xray.%s.amazonaws.com/CreateSamplingRule", escRegion)
+		payload, _ = json.Marshal(map[string]string{"RuleName": name})
+	case "budget_alert":
+		endpoint = fmt.Sprintf("https://budgets.amazonaws.com/accounts/%s/budgets", accID)
+		payload, _ = json.Marshal(map[string]string{"BudgetName": name})
+	case "service_mesh":
+		endpoint = fmt.Sprintf("https://appmesh.%s.amazonaws.com/v20190125/meshes", escRegion)
+		method = "PUT"
+		payload, _ = json.Marshal(map[string]string{"meshName": name})
 	default:
 		endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com/?Action=DescribeInstances&Version=2016-11-15", escRegion)
 	}
