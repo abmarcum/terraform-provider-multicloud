@@ -85,8 +85,12 @@ func (p *MulticloudProvider) Configure(ctx context.Context, req provider.Configu
 		return
 	}
 
-	if !data.MockMode.IsNull() && !data.MockMode.IsUnknown() && data.MockMode.ValueBool() {
-		_ = os.Setenv("MULTICLOUD_MOCK_MODE", "true")
+	if !data.MockMode.IsNull() && !data.MockMode.IsUnknown() {
+		if data.MockMode.ValueBool() {
+			_ = os.Setenv("MULTICLOUD_MOCK_MODE", "true")
+		} else {
+			_ = os.Setenv("MULTICLOUD_MOCK_MODE", "false")
+		}
 	}
 
 	clientManager, err := NewClientManager(ctx, data)
