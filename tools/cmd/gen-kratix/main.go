@@ -23,7 +23,7 @@ spec:
     resource:
       configure:
         - name: terraform-apply-step
-          image: hashicorp/terraform:latest
+          image: hashicorp/terraform:1.9.8
 `
 
 	cwd, _ := os.Getwd()
