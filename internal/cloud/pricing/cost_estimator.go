@@ -1,11 +1,16 @@
 package pricing
 
 import (
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -40,16 +45,51 @@ type GCPCatalogResponse struct {
 	} `json:"skus"`
 }
 
-var liveHTTPClient = &http.Client{
-	Timeout: 2 * time.Second,
+var liveHTTPClient = func() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+	return &http.Client{
+		Timeout:   2 * time.Second,
+		Transport: transport,
+	}
+}()
+
+type cachedPrice struct {
+	price     float64
+	expiresAt time.Time
 }
+
+var (
+	priceCacheMu sync.RWMutex
+	priceCache   = make(map[string]cachedPrice)
+)
 
 // FetchLiveAzurePrice fetches live pricing from Azure Retail Prices API
 func FetchLiveAzurePrice(skuName string) (float64, error) {
+	return FetchLiveAzurePriceWithContext(context.Background(), skuName)
+}
+
+// FetchLiveAzurePriceWithContext fetches live pricing from Azure Retail Prices API with context and TTL caching
+func FetchLiveAzurePriceWithContext(ctx context.Context, skuName string) (float64, error) {
+	now := time.Now()
+	priceCacheMu.RLock()
+	if entry, ok := priceCache[skuName]; ok && now.Before(entry.expiresAt) {
+		priceCacheMu.RUnlock()
+		return entry.price, nil
+	}
+	priceCacheMu.RUnlock()
+
 	filter := fmt.Sprintf("armSkuName eq '%s' and priceType eq 'Consumption'", skuName)
 	endpoint := fmt.Sprintf("https://prices.azure.com/api/retail/arm/prices?$filter=%s", url.QueryEscape(filter))
 
-	resp, err := liveHTTPClient.Get(endpoint)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := liveHTTPClient.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -60,12 +100,19 @@ func FetchLiveAzurePrice(skuName string) (float64, error) {
 	}
 
 	var data AzureRetailPriceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&data); err != nil {
 		return 0, err
 	}
 
 	if len(data.Items) > 0 && data.Items[0].UnitPrice > 0 {
-		return data.Items[0].UnitPrice * 730.0, nil
+		monthly := data.Items[0].UnitPrice * 730.0
+		priceCacheMu.Lock()
+		priceCache[skuName] = cachedPrice{
+			price:     monthly,
+			expiresAt: now.Add(15 * time.Minute),
+		}
+		priceCacheMu.Unlock()
+		return monthly, nil
 	}
 
 	return 0, fmt.Errorf("no pricing found for SKU %s", skuName)
@@ -105,8 +152,8 @@ func EstimateMonthlyCost(providerType string, resourceType string, sizeTier stri
 	r := strings.ToLower(resourceType)
 	tier := strings.ToLower(sizeTier)
 
-	// 1. Live Azure Retail Prices API Feed
-	if p == "azure" && r == "virtual_machine" {
+	// 1. Live Azure Retail Prices API Feed (skipped in mock mode)
+	if p == "azure" && r == "virtual_machine" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" {
 		sku := "Standard_B2s"
 		if tier == "small" {
 			sku = "Standard_B1s"
