@@ -102,7 +102,7 @@ func (r *FailoverPolicyResource) Create(ctx context.Context, req resource.Create
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "failover_policy", plan.PolicyName.ValueString(), reg, nil)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "failover_policy", plan.PolicyName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -162,23 +162,9 @@ func (r *FailoverPolicyResource) Read(ctx context.Context, req resource.ReadRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.PrimaryCloud.IsNull() && state.PrimaryCloud.ValueString() != "" {
-		pType = state.PrimaryCloud.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.PolicyName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "failover_policy", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.PrimaryCloud, state.Region, "failover_policy", state.PolicyName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -188,23 +174,9 @@ func (r *FailoverPolicyResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.PrimaryCloud.IsNull() && plan.PrimaryCloud.ValueString() != "" {
-		pType = plan.PrimaryCloud.ValueString()
-	}
-	reg := "us-central1"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.PolicyName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "failover_policy", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.PrimaryCloud, plan.Region, "failover_policy", plan.PolicyName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -214,12 +186,7 @@ func (r *FailoverPolicyResource) Delete(ctx context.Context, req resource.Delete
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	pType := strings.ToLower(state.PrimaryCloud.ValueString())
-	reg := ""
-	if !state.Region.IsNull() && !state.Region.IsUnknown() {
-		reg = state.Region.ValueString()
-	}
-	_ = adapters.DeleteCloudResource(ctx, pType, "failover_policy", state.PolicyName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.PrimaryCloud, state.Region, "failover_policy", state.PolicyName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *FailoverPolicyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
