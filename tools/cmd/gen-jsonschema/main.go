@@ -40,9 +40,9 @@ func inferAttributeJSONType(attr schema.Attribute) string {
 	switch attr.(type) {
 	case schema.BoolAttribute:
 		return "boolean"
-	case schema.Int64Attribute, schema.Int32Attribute:
+	case schema.Int64Attribute:
 		return "integer"
-	case schema.Float64Attribute, schema.Float32Attribute, schema.NumberAttribute:
+	case schema.Float64Attribute, schema.NumberAttribute:
 		return "number"
 	case schema.ListAttribute, schema.SetAttribute:
 		return "array"
