@@ -93,13 +93,23 @@ func loadResources(statePath string) []ResourceSample {
 						} else if nameAttr, ok := inst.Attributes["balancer_name"].(string); ok && nameAttr != "" {
 							resName = nameAttr
 						}
+						isPublic := false
+						if pub, ok := inst.Attributes["associate_public_ip"].(bool); ok {
+							isPublic = pub
+						} else if pubBlock, ok := inst.Attributes["public_access_block"].(bool); ok {
+							isPublic = !pubBlock
+						}
+						isEncrypted := true
+						if enc, ok := inst.Attributes["encryption_enabled"].(bool); ok {
+							isEncrypted = enc
+						}
 						parsed = append(parsed, ResourceSample{
 							Name:      resName,
 							Provider:  pType,
 							Type:      cleanType,
 							Tier:      tier,
-							Public:    false,
-							Encrypted: true,
+							Public:    isPublic,
+							Encrypted: isEncrypted,
 						})
 					}
 				}
@@ -159,7 +169,7 @@ func main() {
 		case "4":
 			renderSummary()
 		case "5", "q", "quit", "exit":
-			fmt.Sprintf("%sExiting Interactive Infrastructure Inspector. Goodbye!%s\n", Dim, Reset)
+			fmt.Printf("%sExiting Interactive Infrastructure Inspector. Goodbye!%s\n", Dim, Reset)
 			return
 		default:
 			fmt.Printf("%sInvalid choice. Please select an option between 1 and 5.%s\n", Red, Reset)
