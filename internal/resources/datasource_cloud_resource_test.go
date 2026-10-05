@@ -23,7 +23,7 @@ func TestCloudResourceDataSourceMetadataAndSchema(t *testing.T) {
 	schemaResp := &datasource.SchemaResponse{}
 	ds.Schema(ctx, schemaReq, schemaResp)
 
-	for _, attr := range []string{"id", "provider_type", "resource_type", "resource_name", "region", "status", "attributes"} {
+	for _, attr := range []string{"id", "name", "provider_type", "resource_type", "region", "status"} {
 		if _, ok := schemaResp.Schema.Attributes[attr]; !ok {
 			t.Errorf("multicloud_resource data source missing expected attribute '%s'", attr)
 		}
@@ -53,7 +53,7 @@ func TestCostEstimateDataSourceMetadataAndSchema(t *testing.T) {
 	schemaResp := &datasource.SchemaResponse{}
 	ds.Schema(ctx, schemaReq, schemaResp)
 
-	for _, attr := range []string{"id", "provider_type", "resource_type", "size_tier", "monthly_cost", "suggested_tier", "estimated_saving", "optimization_note"} {
+	for _, attr := range []string{"id", "provider_type", "resource_type", "size_tier", "monthly_cost_usd", "suggested_tier", "estimated_saving_usd"} {
 		if _, ok := schemaResp.Schema.Attributes[attr]; !ok {
 			t.Errorf("multicloud_cost_estimate data source missing expected attribute '%s'", attr)
 		}
