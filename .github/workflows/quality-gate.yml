@@ -7,6 +7,9 @@ on:
       - '**.md'
       - 'docs/**'
 
+permissions:
+  contents: read
+
 jobs:
   quality-gate:
     name: Linter & Coverage Check
@@ -19,6 +22,11 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.26'
+
+      - name: Run Go Vet & Real Coverage Profile
+        run: |
+          go vet ./...
+          go test -coverprofile=coverage.out ./...
 
       - name: Verify Coverage Threshold (90%+)
         run: go run ./tools/cmd/gen-coverage
