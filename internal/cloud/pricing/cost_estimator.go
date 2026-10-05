@@ -374,7 +374,27 @@ func EstimateOfflineMonthlyCost(p, r, tier string) float64 {
 			return 1.84 // Azure Blob Hot 100GB baseline
 		}
 
-	case "load_balancer", "nat_gateway", "vpn_gateway", "transit_gateway", "global_anycast_ip":
+	case "block_volume", "backup_vault":
+		switch p {
+		case "aws":
+			return 8.00 // EBS gp3 100GB baseline
+		case "gcp":
+			return 10.00 // Persistent Disk SSD 100GB baseline
+		case "azure":
+			return 9.60 // Azure Managed SSD 100GB baseline
+		}
+
+	case "shared_filesystem":
+		switch p {
+		case "aws":
+			return 30.00 // EFS 100GB baseline
+		case "gcp":
+			return 20.00 // Filestore 100GB baseline
+		case "azure":
+			return 25.00 // Azure Files 100GB baseline
+		}
+
+	case "load_balancer", "nat_gateway", "vpn_gateway", "transit_gateway", "global_anycast_ip", "service_mesh":
 		switch p {
 		case "aws":
 			return 22.50
@@ -384,7 +404,7 @@ func EstimateOfflineMonthlyCost(p, r, tier string) float64 {
 			return 21.90
 		}
 
-	case "cache_cluster", "search_index", "streaming_cluster":
+	case "cache_cluster", "search_index", "streaming_cluster", "vector_index":
 		switch p {
 		case "aws":
 			return 35.00
@@ -394,7 +414,7 @@ func EstimateOfflineMonthlyCost(p, r, tier string) float64 {
 			return 34.20
 		}
 
-	case "data_warehouse", "ai_endpoint", "feature_store", "data_pipeline":
+	case "data_warehouse", "ai_endpoint", "feature_store", "data_pipeline", "batch_compute":
 		switch p {
 		case "aws":
 			return 180.00
@@ -404,7 +424,17 @@ func EstimateOfflineMonthlyCost(p, r, tier string) float64 {
 			return 175.00
 		}
 
-	case "virtual_network", "subnet", "security_group", "route_table", "iam_role", "kms_policy", "workload_identity_pool", "identity_federation":
+	case "workflow", "distributed_tracing":
+		switch p {
+		case "aws":
+			return 12.50
+		case "gcp":
+			return 11.00
+		case "azure":
+			return 12.00
+		}
+
+	case "virtual_network", "subnet", "security_group", "route_table", "iam_role", "kms_policy", "workload_identity_pool", "identity_federation", "tls_certificate", "budget_alert":
 		return 0.00
 	}
 
