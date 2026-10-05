@@ -2,7 +2,7 @@ package resources
 
 import (
 	"context"
-	"fmt"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -85,7 +85,21 @@ func (r *TransitGatewayResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/transit-gateway/%s", providerType, plan.GatewayName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "transit_gateway", plan.GatewayName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -93,6 +107,9 @@ func (r *TransitGatewayResource) Read(ctx context.Context, req resource.ReadRequ
 	var state TransitGatewayModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "transit_gateway", state.GatewayName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -104,6 +121,9 @@ func (r *TransitGatewayResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "transit_gateway", plan.GatewayName.ValueString(), plan.ExtraConfig, nil, resp) {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -113,6 +133,7 @@ func (r *TransitGatewayResource) Delete(ctx context.Context, req resource.Delete
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "transit_gateway", state.GatewayName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *TransitGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
