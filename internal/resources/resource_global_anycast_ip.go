@@ -106,7 +106,7 @@ func (r *GlobalAnycastIPResource) Create(ctx context.Context, req resource.Creat
 		extraAttrs["ip_address_type"] = plan.IPAddressType.ValueString()
 	}
 
-	res, err := adapters.CreateCloudResource(ctx, providerType, "global_anycast_ip", plan.Name.ValueString(), reg, extraAttrs)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "global_anycast_ip", plan.Name.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -138,23 +138,9 @@ func (r *GlobalAnycastIPResource) Read(ctx context.Context, req resource.ReadReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "global"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.Name.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "global_anycast_ip", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "global_anycast_ip", state.Name.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -164,23 +150,9 @@ func (r *GlobalAnycastIPResource) Update(ctx context.Context, req resource.Updat
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
-		pType = plan.ProviderType.ValueString()
-	}
-	reg := "global"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.Name.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "global_anycast_ip", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "global_anycast_ip", plan.Name.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -190,17 +162,7 @@ func (r *GlobalAnycastIPResource) Delete(ctx context.Context, req resource.Delet
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "global"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	_ = adapters.DeleteCloudResource(ctx, pType, "global_anycast_ip", state.Name.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "global_anycast_ip", state.Name.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *GlobalAnycastIPResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
