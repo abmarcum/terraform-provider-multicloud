@@ -94,7 +94,7 @@ func (r *IdentityFederationResource) Create(ctx context.Context, req resource.Cr
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "identity_federation", plan.FederationName.ValueString(), reg, nil)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "identity_federation", plan.FederationName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -154,23 +154,9 @@ func (r *IdentityFederationResource) Read(ctx context.Context, req resource.Read
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.IssuerCloud.IsNull() && state.IssuerCloud.ValueString() != "" {
-		pType = state.IssuerCloud.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.FederationName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "identity_federation", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.IssuerCloud, state.Region, "identity_federation", state.FederationName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -180,23 +166,9 @@ func (r *IdentityFederationResource) Update(ctx context.Context, req resource.Up
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.IssuerCloud.IsNull() && plan.IssuerCloud.ValueString() != "" {
-		pType = plan.IssuerCloud.ValueString()
-	}
-	reg := "us-central1"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.FederationName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "identity_federation", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.IssuerCloud, plan.Region, "identity_federation", plan.FederationName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -206,12 +178,7 @@ func (r *IdentityFederationResource) Delete(ctx context.Context, req resource.De
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	pType := strings.ToLower(state.IssuerCloud.ValueString())
-	reg := ""
-	if !state.Region.IsNull() && !state.Region.IsUnknown() {
-		reg = state.Region.ValueString()
-	}
-	_ = adapters.DeleteCloudResource(ctx, pType, "identity_federation", state.FederationName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.IssuerCloud, state.Region, "identity_federation", state.FederationName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *IdentityFederationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
