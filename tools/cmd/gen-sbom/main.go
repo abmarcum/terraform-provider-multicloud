@@ -4,14 +4,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 )
+
+func resolveModuleVersion(modPath, fallback string) string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, dep := range info.Deps {
+			if dep.Path == modPath && dep.Version != "" && dep.Version != "(devel)" {
+				return dep.Version
+			}
+		}
+	}
+	return fallback
+}
 
 func main() {
 	fmt.Println("======================================================================")
 	fmt.Println("  SOFTWARE BILL OF MATERIALS (SBOM) GENERATOR - SPDX / CYCLONEDX")
 	fmt.Println("======================================================================")
 
-	sbomJSON := `{
+	tfPluginVer := resolveModuleVersion("github.com/hashicorp/terraform-plugin-framework", "v1.9.0")
+	awsSDKVer := resolveModuleVersion("github.com/aws/aws-sdk-go-v2", "v1.47.1")
+
+	sbomJSON := fmt.Sprintf(`{
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
@@ -30,16 +45,16 @@ func main() {
     },
     {
       "name": "github.com/hashicorp/terraform-plugin-framework",
-      "versionInfo": "v1.13.0",
+      "versionInfo": "%s",
       "licenseConcluded": "MPL-2.0"
     },
     {
       "name": "github.com/aws/aws-sdk-go-v2",
-      "versionInfo": "v1.36.0",
+      "versionInfo": "%s",
       "licenseConcluded": "Apache-2.0"
     }
   ]
-}`
+}`, tfPluginVer, awsSDKVer)
 
 	cwd, _ := os.Getwd()
 	outPath := filepath.Join(cwd, "sbom.spdx.json")
