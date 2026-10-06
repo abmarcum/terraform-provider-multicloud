@@ -25,30 +25,47 @@ func NewCacheEngine() *CacheEngine {
 
 // Set stores a key-value pair with a specific Time-To-Live (TTL)
 func (c *CacheEngine) Set(key string, value interface{}, ttl time.Duration) {
+	now := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if len(c.items) >= 1024 {
+		for k, v := range c.items {
+			if now.After(v.expiresAt) {
+				delete(c.items, k)
+			}
+		}
+	}
+
 	c.items[key] = cacheItem{
 		value:     value,
-		expiresAt: time.Now().Add(ttl),
+		expiresAt: now.Add(ttl),
 	}
 }
 
-// Get retrieves a key-value pair if not expired
+// Get retrieves a key-value pair if not expired, evicting expired entries lazily
 func (c *CacheEngine) Get(key string) (interface{}, bool) {
+	now := time.Now()
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	item, found := c.items[key]
 	if !found {
+		c.mu.RUnlock()
 		return nil, false
 	}
-
-	if time.Now().After(item.expiresAt) {
-		return nil, false
+	if !now.After(item.expiresAt) {
+		val := item.value
+		c.mu.RUnlock()
+		return val, true
 	}
+	c.mu.RUnlock()
 
-	return item.value, true
+	// Evict expired item under write lock
+	c.mu.Lock()
+	if current, ok := c.items[key]; ok && now.After(current.expiresAt) {
+		delete(c.items, key)
+	}
+	c.mu.Unlock()
+	return nil, false
 }
 
 // Clear removes all cached items

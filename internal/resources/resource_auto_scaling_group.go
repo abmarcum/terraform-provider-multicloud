@@ -96,7 +96,7 @@ func (r *AutoScalingGroupResource) Create(ctx context.Context, req resource.Crea
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "auto_scaling_group", plan.GroupName.ValueString(), reg, nil)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "auto_scaling_group", plan.GroupName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -135,23 +135,9 @@ func (r *AutoScalingGroupResource) Read(ctx context.Context, req resource.ReadRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.GroupName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "auto_scaling_group", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "auto_scaling_group", state.GroupName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -161,23 +147,9 @@ func (r *AutoScalingGroupResource) Update(ctx context.Context, req resource.Upda
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
-		pType = plan.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.GroupName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "auto_scaling_group", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "auto_scaling_group", plan.GroupName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -187,12 +159,7 @@ func (r *AutoScalingGroupResource) Delete(ctx context.Context, req resource.Dele
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	pType := strings.ToLower(state.ProviderType.ValueString())
-	reg := ""
-	if !state.Region.IsNull() && !state.Region.IsUnknown() {
-		reg = state.Region.ValueString()
-	}
-	_ = adapters.DeleteCloudResource(ctx, pType, "auto_scaling_group", state.GroupName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "auto_scaling_group", state.GroupName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *AutoScalingGroupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

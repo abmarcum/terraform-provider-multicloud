@@ -109,7 +109,7 @@ func (r *StorageTransferJobResource) Create(ctx context.Context, req resource.Cr
 	extraAttrs["source_bucket"] = plan.SourceBucket.ValueString()
 	extraAttrs["destination_bucket"] = plan.DestinationBucket.ValueString()
 
-	res, err := adapters.CreateCloudResource(ctx, providerType, "storage_transfer_job", plan.JobName.ValueString(), reg, extraAttrs)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "storage_transfer_job", plan.JobName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -139,23 +139,9 @@ func (r *StorageTransferJobResource) Read(ctx context.Context, req resource.Read
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.JobName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "storage_transfer_job", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "storage_transfer_job", state.JobName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -165,23 +151,9 @@ func (r *StorageTransferJobResource) Update(ctx context.Context, req resource.Up
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
-		pType = plan.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.JobName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "storage_transfer_job", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "storage_transfer_job", plan.JobName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -191,17 +163,7 @@ func (r *StorageTransferJobResource) Delete(ctx context.Context, req resource.De
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "us-central1"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	_ = adapters.DeleteCloudResource(ctx, pType, "storage_transfer_job", state.JobName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "storage_transfer_job", state.JobName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *StorageTransferJobResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

@@ -2,7 +2,7 @@ package resources
 
 import (
 	"context"
-	"fmt"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -85,7 +85,21 @@ func (r *EdgeFunctionResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/edge-function/%s", providerType, plan.FunctionName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "edge_function", plan.FunctionName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -93,6 +107,9 @@ func (r *EdgeFunctionResource) Read(ctx context.Context, req resource.ReadReques
 	var state EdgeFunctionModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "edge_function", state.FunctionName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -104,6 +121,9 @@ func (r *EdgeFunctionResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "edge_function", plan.FunctionName.ValueString(), plan.ExtraConfig, nil, resp) {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -113,6 +133,7 @@ func (r *EdgeFunctionResource) Delete(ctx context.Context, req resource.DeleteRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "edge_function", state.FunctionName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *EdgeFunctionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

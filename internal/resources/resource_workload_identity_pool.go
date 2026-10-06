@@ -109,7 +109,7 @@ func (r *WorkloadIdentityPoolResource) Create(ctx context.Context, req resource.
 	extraAttrs := make(map[string]interface{})
 	extraAttrs["issuer_url"] = plan.IssuerURL.ValueString()
 
-	res, err := adapters.CreateCloudResource(ctx, providerType, "workload_identity_pool", plan.PoolName.ValueString(), reg, extraAttrs)
+	res, err := adapters.CreateCloudResource(ctx, providerType, "workload_identity_pool", plan.PoolName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -139,23 +139,9 @@ func (r *WorkloadIdentityPoolResource) Read(ctx context.Context, req resource.Re
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "global"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	resName := state.PoolName.ValueString()
-	_, err := adapters.ReadCloudResource(ctx, pType, "workload_identity_pool", resName, reg)
-	if err != nil {
-		resp.State.RemoveResource(ctx)
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "workload_identity_pool", state.PoolName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -165,23 +151,9 @@ func (r *WorkloadIdentityPoolResource) Update(ctx context.Context, req resource.
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !plan.ProviderType.IsNull() && plan.ProviderType.ValueString() != "" {
-		pType = plan.ProviderType.ValueString()
-	}
-	reg := "global"
-	if !plan.Region.IsNull() && plan.Region.ValueString() != "" {
-		reg = plan.Region.ValueString()
-	}
-
-	resName := plan.PoolName.ValueString()
-	_, err := adapters.UpdateCloudResource(ctx, pType, "workload_identity_pool", resName, reg, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Cloud Update Error", err.Error())
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "workload_identity_pool", plan.PoolName.ValueString(), plan.ExtraConfig, nil, resp) {
 		return
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -191,17 +163,7 @@ func (r *WorkloadIdentityPoolResource) Delete(ctx context.Context, req resource.
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	pType := "gcp"
-	if !state.ProviderType.IsNull() && state.ProviderType.ValueString() != "" {
-		pType = state.ProviderType.ValueString()
-	}
-	reg := "global"
-	if !state.Region.IsNull() && state.Region.ValueString() != "" {
-		reg = state.Region.ValueString()
-	}
-
-	_ = adapters.DeleteCloudResource(ctx, pType, "workload_identity_pool", state.PoolName.ValueString(), reg)
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "workload_identity_pool", state.PoolName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *WorkloadIdentityPoolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

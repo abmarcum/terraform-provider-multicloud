@@ -8,498 +8,473 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/common"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
 type GCPAdapter struct{}
 
+var (
+	defaultTokenSourceOnce sync.Once
+	defaultTokenSource     oauth2.TokenSource
+	defaultTokenSourceErr  error
+)
+
+func getGCPAccessToken(ctx context.Context, req common.ResourceRequest) (string, error) {
+	if req.Attributes != nil {
+		if credJSON, ok := req.Attributes["gcp_credentials"].(string); ok && strings.TrimSpace(credJSON) != "" {
+			raw := []byte(credJSON)
+			if !strings.HasPrefix(strings.TrimSpace(credJSON), "{") {
+				/* #nosec G304 */
+				if fileBytes, err := os.ReadFile(filepath.Clean(credJSON)); err == nil {
+					raw = fileBytes
+				}
+			}
+			creds, err := google.CredentialsFromJSON(ctx, raw, "https://www.googleapis.com/auth/cloud-platform")
+			if err != nil {
+				return "", fmt.Errorf("GCP credentials parse error: %w", err)
+			}
+			tok, err := creds.TokenSource.Token()
+			if err != nil {
+				return "", fmt.Errorf("GCP OAuth2 token exchange failed: %w", err)
+			}
+			return tok.AccessToken, nil
+		}
+	}
+
+	defaultTokenSourceOnce.Do(func() {
+		defaultTokenSource, defaultTokenSourceErr = google.DefaultTokenSource(context.Background(), "https://www.googleapis.com/auth/cloud-platform")
+	})
+	if defaultTokenSourceErr != nil || defaultTokenSource == nil {
+		return "", fmt.Errorf("GCP authentication failed: %w", defaultTokenSourceErr)
+	}
+	token, err := defaultTokenSource.Token()
+	if err != nil {
+		return "", fmt.Errorf("GCP OAuth2 token retrieval failed: %w", err)
+	}
+	return token.AccessToken, nil
+}
+
 func getGCPIntelMachineType(sizeTier string, extraAttrs map[string]interface{}) string {
 	if extraAttrs != nil {
-		if machine, ok := extraAttrs["instance_type"].(string); ok && machine != "" {
-			return machine
+		if inst, ok := extraAttrs["instance_type"].(string); ok && inst != "" {
+			return inst
 		}
-		if machine, ok := extraAttrs["gcp_machine_type"].(string); ok && machine != "" {
-			return machine
-		}
-		if arch, ok := extraAttrs["gcp_hardware_architecture"].(string); ok && strings.ToLower(arch) == "intel" {
-			switch strings.ToLower(sizeTier) {
-			case "large":
-				return "n2-standard-8" // 3rd Gen Intel Xeon Platinum 8373C (Ice Lake)
-			case "medium":
-				return "n2-standard-4" // 3rd Gen Intel Xeon Platinum 8373C (Ice Lake)
-			default:
-				return "n2-standard-2" // 3rd Gen Intel Xeon Platinum 8373C (Ice Lake)
-			}
+		if inst, ok := extraAttrs["gcp_machine_type"].(string); ok && inst != "" {
+			return inst
 		}
 	}
 	switch strings.ToLower(sizeTier) {
 	case "large":
-		return "n2-standard-8" // Intel Xeon Ice Lake
+		return "n2-standard-4"
 	case "medium":
-		return "n2-standard-4" // Intel Xeon Ice Lake
+		return "n2-standard-2"
 	default:
-		return "n2-standard-2" // Intel Xeon Ice Lake
+		return "n2-standard-2"
 	}
 }
 
-func (a *GCPAdapter) getGCPEndpoint(project string, region string, resType string, name string, attrs map[string]interface{}) (string, string, []byte) {
+func getGCPServiceEndpoint(project string, region string, resType string, name string, extraAttrs map[string]interface{}) (string, []byte) {
 	var endpoint string
-	var method = "POST"
 	var payload []byte
 
-	escProject := url.QueryEscape(project)
+	escProject := url.PathEscape(project)
+	escQueryProject := url.QueryEscape(project)
 	escRegion := url.PathEscape(region)
 	escName := url.PathEscape(name)
 	escQueryName := url.QueryEscape(name)
 
 	switch resType {
-	case "storage_bucket":
-		endpoint = fmt.Sprintf("https://storage.googleapis.com/storage/v1/b?project=%s", escProject)
-		bodyMap := map[string]string{"name": name, "location": region}
-		payload, _ = json.Marshal(bodyMap)
-	case "virtual_network":
+	case "storage_bucket", "storage_inventory_report":
+		endpoint = fmt.Sprintf("https://storage.googleapis.com/storage/v1/b?project=%s", escQueryProject)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "location": region})
+	case "virtual_machine", "bastion_host":
+		sizeTier, _ := extraAttrs["size_tier"].(string)
+		machineType := getGCPIntelMachineType(sizeTier, extraAttrs)
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{
+			"name":        name,
+			"machineType": fmt.Sprintf("zones/%s-a/machineTypes/%s", escRegion, url.PathEscape(machineType)),
+		})
+	case "custom_machine_type":
+		vcpus := int64(2)
+		mem := int64(4096)
+		if v, ok := extraAttrs["vcpus"].(int64); ok && v > 0 {
+			vcpus = v
+		}
+		if m, ok := extraAttrs["memory_mb"].(int64); ok && m > 0 {
+			mem = m
+		}
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{
+			"name":        name,
+			"machineType": fmt.Sprintf("zones/%s-a/machineTypes/custom-%d-%d", escRegion, vcpus, mem),
+		})
+	case "virtual_network", "vpc_peering":
 		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/networks", escProject)
-		bodyMap := map[string]interface{}{"name": name, "autoCreateSubnetworks": true}
-		payload, _ = json.Marshal(bodyMap)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "autoCreateSubnetworks": true})
 	case "subnet":
 		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/subnetworks", escProject, escRegion)
-		bodyMap := map[string]interface{}{"name": name, "ipCidrRange": "10.0.1.0/24"}
-		payload, _ = json.Marshal(bodyMap)
-	case "security_group":
-		netName := "default"
-		if net, ok := attrs["network_id"].(string); ok && net != "" {
-			netName = net
-		} else if net, ok := attrs["gcp_network"].(string); ok && net != "" {
-			netName = net
-		}
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "ipCidrRange": "10.0.1.0/24"})
+	case "security_group", "waf_policy":
 		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/firewalls", escProject)
-		bodyMap := map[string]interface{}{
-			"name":    name,
-			"network": fmt.Sprintf("projects/%s/global/networks/%s", project, netName),
-			"allowed": []map[string]interface{}{
-				{"IPProtocol": "tcp", "ports": []string{"80", "443"}},
-			},
-		}
-		payload, _ = json.Marshal(bodyMap)
-	case "db_instance":
-		endpoint = fmt.Sprintf("https://sqladmin.googleapis.com/v1/projects/%s/instances", escProject)
-		bodyMap := map[string]interface{}{
-			"name":            name,
-			"region":          region,
-			"databaseVersion": "POSTGRES_15",
-			"settings": map[string]interface{}{
-				"tier": "db-f1-micro",
-			},
-		}
-		payload, _ = json.Marshal(bodyMap)
-	case "secret", "secret_rotator":
-		endpoint = fmt.Sprintf("https://secretmanager.googleapis.com/v1/projects/%s/secrets?secretId=%s", escProject, escQueryName)
-		bodyMap := map[string]interface{}{
-			"replication": map[string]interface{}{
-				"automatic": map[string]interface{}{},
-			},
-		}
-		payload, _ = json.Marshal(bodyMap)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
 	case "static_ip":
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/addresses", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "global_anycast_ip":
 		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/addresses", escProject)
-		bodyMap := map[string]string{"name": name}
-		payload, _ = json.Marshal(bodyMap)
-	case "load_balancer":
-		ipRef := fmt.Sprintf("projects/%s/global/addresses/%s-ip", project, name)
-		if ip, ok := attrs["ip_name"].(string); ok && ip != "" {
-			ipRef = fmt.Sprintf("projects/%s/global/addresses/%s", project, ip)
-		} else if ip, ok := attrs["allocated_ip"].(string); ok && ip != "" {
-			ipRef = ip
-		}
-		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/forwardingRules", escProject)
-		bodyMap := map[string]interface{}{
-			"name":                name,
-			"IPAddress":           ipRef,
-			"loadBalancingScheme": "EXTERNAL",
-			"portRange":           "80-80",
-			"target":              fmt.Sprintf("projects/%s/global/targetHttpProxies/%s-proxy", project, name),
-		}
-		payload, _ = json.Marshal(bodyMap)
-	case "dns_zone":
-		managedZone, _ := attrs["gcp_dns_managed_zone"].(string)
-		if managedZone != "" {
-			endpoint = fmt.Sprintf("https://dns.googleapis.com/dns/v1/projects/%s/managedZones/%s/rrsets", escProject, url.PathEscape(managedZone))
-			recName := name
-			if !strings.HasSuffix(recName, ".") {
-				recName += "."
-			}
-			recType := "A"
-			if t, ok := attrs["gcp_record_type"].(string); ok && t != "" {
-				recType = t
-			}
-			var ipAddr string
-			for _, k := range []string{"gcp_record_target", "gcp_record_ip", "allocated_ip", "target"} {
-				if val, ok := attrs[k].(string); ok && val != "" {
-					ipAddr = val
-					break
-				}
-			}
-			if ipAddr == "" {
-				ipAddr = "127.0.0.1"
-			}
-			bodyMap := map[string]interface{}{
-				"name":    recName,
-				"type":    recType,
-				"ttl":     300,
-				"rrdatas": []string{ipAddr},
-			}
-			payload, _ = json.Marshal(bodyMap)
-		} else {
-			endpoint = fmt.Sprintf("https://dns.googleapis.com/dns/v1/projects/%s/managedZones", escProject)
-			dnsName := name
-			if !strings.HasSuffix(dnsName, ".") {
-				dnsName += "."
-			}
-			bodyMap := map[string]string{"name": name, "dnsName": dnsName, "description": "Managed public DNS zone"}
-			payload, _ = json.Marshal(bodyMap)
-		}
-	case "serverless_function":
-		bucketName := fmt.Sprintf("%s-temp-processing", project)
-		if b, ok := attrs["gcp_source_bucket"].(string); ok && b != "" {
-			bucketName = b
-		}
-		endpoint = fmt.Sprintf("https://cloudfunctions.googleapis.com/v2/projects/%s/locations/%s/functions?functionId=%s", escProject, escRegion, escQueryName)
-		bodyMap := map[string]interface{}{
-			"name": fmt.Sprintf("projects/%s/locations/%s/functions/%s", project, region, name),
-			"buildConfig": map[string]interface{}{
-				"runtime":    "python311",
-				"entryPoint": "handler",
-				"source": map[string]interface{}{
-					"storageSource": map[string]string{
-						"bucket": bucketName,
-						"object": "source.zip",
-					},
-				},
-			},
-		}
-		payload, _ = json.Marshal(bodyMap)
-	case "kubernetes_cluster":
-		endpoint = fmt.Sprintf("https://container.googleapis.com/v1/projects/%s/locations/%s/clusters", escProject, escRegion)
-		bodyMap := map[string]interface{}{"cluster": map[string]string{"name": name}}
-		payload, _ = json.Marshal(bodyMap)
-	case "cache_cluster":
-		endpoint = fmt.Sprintf("https://redis.googleapis.com/v1/projects/%s/locations/%s/instances?instanceId=%s", escProject, escRegion, escQueryName)
-		bodyMap := map[string]interface{}{"tier": "BASIC", "memorySizeGb": 1}
-		payload, _ = json.Marshal(bodyMap)
-	case "container_app":
-		endpoint = fmt.Sprintf("https://run.googleapis.com/v1/projects/%s/locations/%s/services", escProject, escRegion)
-		bodyMap := map[string]interface{}{"apiVersion": "serving.knative.dev/v1", "kind": "Service", "metadata": map[string]string{"name": name}}
-		payload, _ = json.Marshal(bodyMap)
-	case "pubsub_topic":
-		endpoint = fmt.Sprintf("https://pubsub.googleapis.com/v1/projects/%s/topics/%s", escProject, escName)
-		method = "PUT"
-		payload = []byte("{}")
-	case "kms_key":
-		endpoint = fmt.Sprintf("https://cloudkms.googleapis.com/v1/projects/%s/locations/%s/keyRings?keyRingId=%s", escProject, escRegion, escQueryName)
-		payload = []byte("{}")
-	case "nosql_table":
-		endpoint = fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/collectionGroups/%s/fields", escProject, escName)
-		payload = []byte("{}")
-	case "iam_role":
-		endpoint = fmt.Sprintf("https://iam.googleapis.com/v1/projects/%s/roles", escProject)
-		bodyMap := map[string]interface{}{"roleId": name, "role": map[string]string{"title": name}}
-		payload, _ = json.Marshal(bodyMap)
-	case "message_queue":
-		endpoint = fmt.Sprintf("https://pubsub.googleapis.com/v1/projects/%s/subscriptions/%s", escProject, escName)
-		method = "PUT"
-		bodyMap := map[string]string{"topic": fmt.Sprintf("projects/%s/topics/app-topic", project)}
-		payload, _ = json.Marshal(bodyMap)
-	case "metric_alert":
-		endpoint = fmt.Sprintf("https://monitoring.googleapis.com/v1/projects/%s/alertPolicies", escProject)
-		bodyMap := map[string]string{"displayName": name}
-		payload, _ = json.Marshal(bodyMap)
-	case "monitoring_dashboard":
-		endpoint = fmt.Sprintf("https://monitoring.googleapis.com/v1/projects/%s/dashboards", escProject)
-		bodyMap := map[string]string{"displayName": name}
-		payload, _ = json.Marshal(bodyMap)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "ipVersion": "IPV4"})
+	case "nat_gateway", "vpn_gateway", "transit_gateway":
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/routers", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
 	case "route_table":
 		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/routes", escProject)
-		bodyMap := map[string]interface{}{"name": name, "destRange": "0.0.0.0/0", "nextHopGateway": fmt.Sprintf("projects/%s/global/gateways/default-internet-gateway", project)}
-		payload, _ = json.Marshal(bodyMap)
-	case "nat_gateway":
-		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/routers", escProject, escRegion)
-		bodyMap := map[string]string{"name": name}
-		payload, _ = json.Marshal(bodyMap)
-	case "bastion_host", "virtual_machine":
-		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances", escProject, escRegion)
-		bodyMap := map[string]interface{}{
-			"name":        name,
-			"machineType": fmt.Sprintf("zones/%s-a/machineTypes/e2-micro", region),
-			"disks": []map[string]interface{}{
-				{"boot": true, "initializeParams": map[string]string{"sourceImage": "projects/debian-cloud/global/images/family/debian-11"}},
-			},
-		}
-		payload, _ = json.Marshal(bodyMap)
-	case "api_gateway", "graphql_api":
-		endpoint = fmt.Sprintf("https://apigateway.googleapis.com/v1/projects/%s/locations/global/apis?apiId=%s", escProject, escQueryName)
-		payload = []byte("{}")
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "destRange": "0.0.0.0/0"})
+	case "load_balancer", "private_endpoint":
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/forwardingRules", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
 	case "cdn_distribution":
 		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/backendServices", escProject)
-		bodyMap := map[string]interface{}{"name": name, "enableCDN": true}
-		payload, _ = json.Marshal(bodyMap)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "enableCDN": true})
+	case "auto_scaling_group":
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instanceGroupManagers", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "targetSize": 2})
+	case "db_instance":
+		endpoint = fmt.Sprintf("https://sqladmin.googleapis.com/v1/projects/%s/instances", escProject)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "region": region, "databaseVersion": "POSTGRES_15"})
+	case "nosql_table":
+		endpoint = fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases?databaseId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"type": "FIRESTORE_NATIVE", "locationId": region})
+	case "cache_cluster":
+		endpoint = fmt.Sprintf("https://redis.googleapis.com/v1/projects/%s/locations/%s/instances?instanceId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"tier": "STANDARD_HA", "memorySizeGb": 4})
+	case "kubernetes_cluster":
+		endpoint = fmt.Sprintf("https://container.googleapis.com/v1/projects/%s/locations/%s/clusters", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"cluster": map[string]interface{}{"name": name, "initialNodeCount": 3}})
 	case "container_registry":
 		endpoint = fmt.Sprintf("https://artifactregistry.googleapis.com/v1/projects/%s/locations/%s/repositories?repositoryId=%s", escProject, escRegion, escQueryName)
-		bodyMap := map[string]string{"format": "DOCKER"}
-		payload, _ = json.Marshal(bodyMap)
-	case "data_warehouse":
-		endpoint = fmt.Sprintf("https://bigquery.googleapis.com/v1/projects/%s/datasets", escProject)
-		bodyMap := map[string]interface{}{"datasetReference": map[string]string{"datasetId": name}}
-		payload, _ = json.Marshal(bodyMap)
+		payload, _ = json.Marshal(map[string]interface{}{"format": "DOCKER"})
+	case "container_app":
+		endpoint = fmt.Sprintf("https://run.googleapis.com/v2/projects/%s/locations/%s/services?serviceId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"ingress": "INGRESS_TRAFFIC_ALL"})
+	case "serverless_function", "edge_function":
+		endpoint = fmt.Sprintf("https://cloudfunctions.googleapis.com/v2/projects/%s/locations/%s/functions?functionId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "secret", "secret_rotator":
+		endpoint = fmt.Sprintf("https://secretmanager.googleapis.com/v1/projects/%s/secrets?secretId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"replication": map[string]interface{}{"automatic": map[string]interface{}{}}})
+	case "kms_key", "kms_policy":
+		endpoint = fmt.Sprintf("https://cloudkms.googleapis.com/v1/projects/%s/locations/%s/keyRings/default/cryptoKeys?cryptoKeyId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"purpose": "ENCRYPT_DECRYPT"})
+	case "iam_role":
+		endpoint = fmt.Sprintf("https://iam.googleapis.com/v1/projects/%s/serviceAccounts", escProject)
+		payload, _ = json.Marshal(map[string]interface{}{"accountId": name})
+	case "identity_federation", "workload_identity_pool":
+		endpoint = fmt.Sprintf("https://iam.googleapis.com/v1/projects/%s/locations/global/workloadIdentityPools?workloadIdentityPoolId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
+	case "dns_zone", "dns_record", "dns_health_check", "dns_zone_link", "dns_resolver", "dnssec", "failover_policy":
+		endpoint = fmt.Sprintf("https://dns.googleapis.com/dns/v1/projects/%s/managedZones", escProject)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "dnsName": name + ".example.com."})
+	case "pubsub_topic", "message_queue":
+		endpoint = fmt.Sprintf("https://pubsub.googleapis.com/v1/projects/%s/topics/%s", escProject, escName)
+		payload = []byte(`{}`)
 	case "event_bridge":
 		endpoint = fmt.Sprintf("https://eventarc.googleapis.com/v1/projects/%s/locations/%s/triggers?triggerId=%s", escProject, escRegion, escQueryName)
-		payload = []byte("{}")
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "api_gateway", "graphql_api":
+		endpoint = fmt.Sprintf("https://apigateway.googleapis.com/v1/projects/%s/locations/global/apis?apiId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
+	case "data_warehouse":
+		endpoint = fmt.Sprintf("https://bigquery.googleapis.com/bigquery/v2/projects/%s/datasets", escProject)
+		payload, _ = json.Marshal(map[string]interface{}{"datasetReference": map[string]string{"datasetId": name, "projectId": project}})
+	case "search_index":
+		endpoint = fmt.Sprintf("https://discoveryengine.googleapis.com/v1/projects/%s/locations/global/collections/default_collection/engines?engineId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
+	case "monitoring_dashboard", "metric_alert":
+		endpoint = fmt.Sprintf("https://monitoring.googleapis.com/v1/projects/%s/dashboards", escProject)
+		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
 	case "log_workspace":
-		endpoint = fmt.Sprintf("https://logging.googleapis.com/v1/projects/%s/locations/%s/buckets/%s", escProject, escRegion, escName)
-		method = "PUT"
-		payload = []byte("{}")
+		endpoint = fmt.Sprintf("https://logging.googleapis.com/v2/projects/%s/locations/%s/buckets?bucketId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"retentionDays": 30})
+	case "data_sync", "storage_transfer_job":
+		endpoint = "https://storagetransfer.googleapis.com/v1/transferJobs"
+		payload, _ = json.Marshal(map[string]interface{}{"projectId": project, "description": name, "status": "ENABLED"})
+	case "app_config":
+		endpoint = fmt.Sprintf("https://runtimeconfig.googleapis.com/v1beta1/projects/%s/configs", escProject)
+		payload, _ = json.Marshal(map[string]interface{}{"name": fmt.Sprintf("projects/%s/configs/%s", project, name)})
+	case "ai_endpoint", "feature_store", "vector_index":
+		endpoint = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/endpoints", escRegion, escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
 	case "streaming_cluster":
 		endpoint = fmt.Sprintf("https://managedkafka.googleapis.com/v1/projects/%s/locations/%s/clusters?clusterId=%s", escProject, escRegion, escQueryName)
-		payload = []byte("{}")
-	case "waf_policy":
-		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/securityPolicies", escProject)
-		bodyMap := map[string]string{"name": name}
-		payload, _ = json.Marshal(bodyMap)
-	case "ai_endpoint":
-		endpoint = fmt.Sprintf("https://aiplatform.googleapis.com/v1/projects/%s/locations/%s/endpoints", escProject, escRegion)
-		bodyMap := map[string]string{"displayName": name}
-		payload, _ = json.Marshal(bodyMap)
-	case "app_config":
-		endpoint = fmt.Sprintf("https://runtimeconfig.googleapis.com/v1/projects/%s/configs", escProject)
-		bodyMap := map[string]string{"name": fmt.Sprintf("projects/%s/configs/%s", project, name)}
-		payload, _ = json.Marshal(bodyMap)
-	case "auto_scaling_group":
-		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/instanceGroupManagers", escProject, escRegion)
-		bodyMap := map[string]string{"name": name}
-		payload, _ = json.Marshal(bodyMap)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "security_center":
+		endpoint = fmt.Sprintf("https://securitycenter.googleapis.com/v1/projects/%s/MuteConfigs?muteConfigId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"filter": "severity=\"HIGH\""})
+	case "data_pipeline":
+		endpoint = fmt.Sprintf("https://dataflow.googleapis.com/v1b3/projects/%s/locations/%s/jobs", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "block_volume":
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/disks", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name, "sizeGb": "100"})
+	case "shared_filesystem":
+		endpoint = fmt.Sprintf("https://file.googleapis.com/v1/projects/%s/locations/%s-a/instances?instanceId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"tier": "BASIC_HDD"})
+	case "tls_certificate":
+		endpoint = fmt.Sprintf("https://certificatemanager.googleapis.com/v1/projects/%s/locations/global/certificates?certificateId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "workflow":
+		endpoint = fmt.Sprintf("https://workflows.googleapis.com/v1/projects/%s/locations/%s/workflows?workflowId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "batch_compute":
+		endpoint = fmt.Sprintf("https://batch.googleapis.com/v1/projects/%s/locations/%s/jobs?jobId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "backup_vault":
+		endpoint = fmt.Sprintf("https://backupdr.googleapis.com/v1/projects/%s/locations/%s/backupVaults?backupVaultId=%s", escProject, escRegion, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
+	case "distributed_tracing":
+		endpoint = fmt.Sprintf("https://cloudtrace.googleapis.com/v2/projects/%s/traces:batchWrite", escProject)
+		payload = []byte(`{"spans":[]}`)
+	case "budget_alert":
+		endpoint = "https://billingbudgets.googleapis.com/v1/billingAccounts/default/budgets"
+		payload, _ = json.Marshal(map[string]interface{}{"displayName": name})
+	case "service_mesh":
+		endpoint = fmt.Sprintf("https://networkservices.googleapis.com/v1/projects/%s/locations/global/meshes?meshId=%s", escProject, escQueryName)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
 	default:
-		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/addresses", escProject, escRegion)
-		bodyMap := map[string]string{"name": name}
-		payload, _ = json.Marshal(bodyMap)
+		endpoint = fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances", escProject, escRegion)
+		payload, _ = json.Marshal(map[string]interface{}{"name": name})
 	}
 
-	return endpoint, method, payload
+	return endpoint, payload
 }
 
-func (a *GCPAdapter) getGCPDeleteEndpoint(project string, region string, resType string, name string) string {
-	escProject := url.QueryEscape(project)
+func getGCPDeleteEndpoint(project string, region string, resType string, name string) string {
+	escProject := url.PathEscape(project)
 	escRegion := url.PathEscape(region)
 	escName := url.PathEscape(name)
 
 	switch resType {
-	case "storage_bucket":
+	case "storage_bucket", "storage_inventory_report":
 		return fmt.Sprintf("https://storage.googleapis.com/storage/v1/b/%s", escName)
-	case "virtual_network":
+	case "virtual_machine", "custom_machine_type", "bastion_host":
+		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances/%s", escProject, escRegion, escName)
+	case "virtual_network", "vpc_peering":
 		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/networks/%s", escProject, escName)
 	case "subnet":
 		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/subnetworks/%s", escProject, escRegion, escName)
-	case "security_group":
+	case "security_group", "waf_policy":
 		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/firewalls/%s", escProject, escName)
+	case "static_ip":
+		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/addresses/%s", escProject, escRegion, escName)
+	case "global_anycast_ip":
+		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/addresses/%s", escProject, escName)
 	case "db_instance":
 		return fmt.Sprintf("https://sqladmin.googleapis.com/v1/projects/%s/instances/%s", escProject, escName)
-	case "secret", "secret_rotator":
-		return fmt.Sprintf("https://secretmanager.googleapis.com/v1/projects/%s/secrets/%s", escProject, escName)
-	case "static_ip":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/addresses/%s", escProject, escName)
-	case "load_balancer":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/forwardingRules/%s", escProject, escName)
-	case "dns_zone":
-		return fmt.Sprintf("https://dns.googleapis.com/dns/v1/projects/%s/managedZones/%s", escProject, escName)
-	case "serverless_function":
-		return fmt.Sprintf("https://cloudfunctions.googleapis.com/v2/projects/%s/locations/%s/functions/%s", escProject, escRegion, escName)
 	case "kubernetes_cluster":
 		return fmt.Sprintf("https://container.googleapis.com/v1/projects/%s/locations/%s/clusters/%s", escProject, escRegion, escName)
-	case "cache_cluster":
-		return fmt.Sprintf("https://redis.googleapis.com/v1/projects/%s/locations/%s/instances/%s", escProject, escRegion, escName)
-	case "container_app":
-		return fmt.Sprintf("https://run.googleapis.com/v1/projects/%s/locations/%s/services/%s", escProject, escRegion, escName)
-	case "pubsub_topic":
+	case "serverless_function", "edge_function":
+		return fmt.Sprintf("https://cloudfunctions.googleapis.com/v2/projects/%s/locations/%s/functions/%s", escProject, escRegion, escName)
+	case "secret", "secret_rotator":
+		return fmt.Sprintf("https://secretmanager.googleapis.com/v1/projects/%s/secrets/%s", escProject, escName)
+	case "pubsub_topic", "message_queue":
 		return fmt.Sprintf("https://pubsub.googleapis.com/v1/projects/%s/topics/%s", escProject, escName)
-	case "kms_key":
-		return fmt.Sprintf("https://cloudkms.googleapis.com/v1/projects/%s/locations/%s/keyRings/%s", escProject, escRegion, escName)
-	case "nosql_table":
-		return fmt.Sprintf("https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s", escProject, escName)
-	case "iam_role":
-		return fmt.Sprintf("https://iam.googleapis.com/v1/projects/%s/roles/%s", escProject, escName)
-	case "message_queue":
-		return fmt.Sprintf("https://pubsub.googleapis.com/v1/projects/%s/subscriptions/%s", escProject, escName)
-	case "metric_alert":
-		return fmt.Sprintf("https://monitoring.googleapis.com/v1/projects/%s/alertPolicies/%s", escProject, escName)
-	case "monitoring_dashboard":
-		return fmt.Sprintf("https://monitoring.googleapis.com/v1/projects/%s/dashboards/%s", escProject, escName)
-	case "route_table":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/routes/%s", escProject, escName)
-	case "nat_gateway":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/routers/%s", escProject, escRegion, escName)
-	case "bastion_host", "virtual_machine":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances/%s", escProject, escRegion, escName)
-	case "api_gateway", "graphql_api":
-		return fmt.Sprintf("https://apigateway.googleapis.com/v1/projects/%s/locations/global/apis/%s", escProject, escName)
-	case "cdn_distribution":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/backendServices/%s", escProject, escName)
-	case "container_registry":
-		return fmt.Sprintf("https://artifactregistry.googleapis.com/v1/projects/%s/locations/%s/repositories/%s", escProject, escRegion, escName)
-	case "data_warehouse":
-		return fmt.Sprintf("https://bigquery.googleapis.com/v1/projects/%s/datasets/%s", escProject, escName)
-	case "event_bridge":
-		return fmt.Sprintf("https://eventarc.googleapis.com/v1/projects/%s/locations/%s/triggers/%s", escProject, escRegion, escName)
-	case "log_workspace":
-		return fmt.Sprintf("https://logging.googleapis.com/v1/projects/%s/locations/%s/buckets/%s", escProject, escRegion, escName)
-	case "streaming_cluster":
-		return fmt.Sprintf("https://managedkafka.googleapis.com/v1/projects/%s/locations/%s/clusters/%s", escProject, escRegion, escName)
-	case "waf_policy":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/global/securityPolicies/%s", escProject, escName)
-	case "ai_endpoint":
-		return fmt.Sprintf("https://aiplatform.googleapis.com/v1/projects/%s/locations/%s/endpoints/%s", escProject, escRegion, escName)
-	case "app_config":
-		return fmt.Sprintf("https://runtimeconfig.googleapis.com/v1/projects/%s/configs/%s", escProject, escName)
-	case "auto_scaling_group":
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/instanceGroupManagers/%s", escProject, escRegion, escName)
 	default:
-		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/regions/%s/addresses/%s", escProject, escRegion, escName)
+		return fmt.Sprintf("https://compute.googleapis.com/compute/v1/projects/%s/zones/%s-a/instances/%s", escProject, escRegion, escName)
 	}
 }
 
-func (a *GCPAdapter) CreateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
+func getGCPReadEndpoint(project string, region string, resType string, name string) string {
+	return getGCPDeleteEndpoint(project, region, resType, name)
+}
+
+func buildGCPMockAttributes(region string, req common.ResourceRequest) map[string]interface{} {
+	attrs := map[string]interface{}{
+		"region":         region,
+		"provider_type":  "gcp",
+		"failoverstatus": "PRIMARY_HEALTHY",
+		"syncstatus":     "REPLICATION_ACTIVE",
+		"apiendpoint":    fmt.Sprintf("https://%s.apigateway.gcp.cloud.goog", req.ResourceName),
+		"ip_address":     fmt.Sprintf("198.51.100.%d", len(req.ResourceName)*7%250+1),
+		"dns_name":       fmt.Sprintf("%s.anycast.gcp.net", req.ResourceName),
+	}
+	for k, v := range req.Attributes {
+		attrs[k] = v
+	}
+	return attrs
+}
+
+func (g *GCPAdapter) CreateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	project, _ := common.GetGCPProject(req)
 	region := common.GetRegion(req.Region, "us-central1")
-	if common.IsMockMode() {
+	if common.IsRequestMockMode(req) {
 		return common.ResourceResponse{
-			ID:     fmt.Sprintf("gcp/%s/%s/%s", req.ResourceType, region, req.ResourceName),
-			Status: "RUNNING",
+			ID:         fmt.Sprintf("projects/%s/locations/%s/%s/%s", project, region, req.ResourceType, req.ResourceName),
+			Status:     "RUNNING",
+			Attributes: buildGCPMockAttributes(region, req),
 		}, nil
 	}
 
-	ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	accessToken, err := getGCPAccessToken(ctx, req)
 	if err != nil {
-		return common.ResourceResponse{}, fmt.Errorf("GCP authentication error (DefaultTokenSource): %w", err)
-	}
-	token, err := ts.Token()
-	if err != nil || token.AccessToken == "" {
-		return common.ResourceResponse{}, fmt.Errorf("failed to obtain GCP access token: %w", err)
+		return common.ResourceResponse{}, err
 	}
 
-	apiEndpoint, method, payload := a.getGCPEndpoint(project, region, req.ResourceType, req.ResourceName, req.Attributes)
-	if apiEndpoint != "" {
-		httpReq, err := http.NewRequestWithContext(ctx, method, apiEndpoint, bytes.NewBuffer(payload))
-		if err != nil {
-			return common.ResourceResponse{}, fmt.Errorf("failed to create GCP HTTP request: %w", err)
-		}
-		httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
-		httpReq.Header.Set("Content-Type", "application/json")
-		resp, err := common.HTTPClient.Do(httpReq)
-		if err != nil {
-			return common.ResourceResponse{}, fmt.Errorf("GCP API request failed: %w", err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode >= 400 {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			return common.ResourceResponse{}, fmt.Errorf("GCP API error (status %d): %s", resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
-		}
+	apiEndpoint, payload := getGCPServiceEndpoint(project, region, req.ResourceType, req.ResourceName, req.Attributes)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiEndpoint, bytes.NewBuffer(payload))
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("failed to create GCP HTTP request: %w", err)
 	}
+	httpReq.Header.Set("Authorization", "Bearer "+accessToken)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	/* #nosec G107 G704 */
+	resp, err := common.HTTPClient.Do(httpReq)
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("GCP API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode >= 400 && resp.StatusCode != 409 {
+		return common.ResourceResponse{}, fmt.Errorf("GCP API error (status %d): %s", resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
+	}
+
+	respAttrs := buildGCPMockAttributes(region, req)
+	_ = json.Unmarshal(bodyBytes, &respAttrs)
 
 	return common.ResourceResponse{
-		ID:     fmt.Sprintf("projects/%s/regions/%s/%s/%s", project, region, req.ResourceType, req.ResourceName),
-		Status: "RUNNING",
+		ID:         fmt.Sprintf("projects/%s/locations/%s/%s/%s", project, region, req.ResourceType, req.ResourceName),
+		Status:     "RUNNING",
+		Attributes: respAttrs,
 	}, nil
 }
 
-func (a *GCPAdapter) ReadResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
+func (g *GCPAdapter) ReadResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	project, _ := common.GetGCPProject(req)
 	region := common.GetRegion(req.Region, "us-central1")
-	if common.IsMockMode() {
-		return common.ResourceResponse{ID: req.ResourceName, Status: "RUNNING"}, nil
+	if common.IsRequestMockMode(req) {
+		return common.ResourceResponse{
+			ID:         req.ResourceName,
+			Status:     "RUNNING",
+			Attributes: buildGCPMockAttributes(region, req),
+		}, nil
 	}
 
-	ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	accessToken, err := getGCPAccessToken(ctx, req)
 	if err != nil {
-		return common.ResourceResponse{}, fmt.Errorf("GCP authentication error (DefaultTokenSource): %w", err)
-	}
-	token, err := ts.Token()
-	if err != nil || token.AccessToken == "" {
-		return common.ResourceResponse{}, fmt.Errorf("failed to obtain GCP access token: %w", err)
+		return common.ResourceResponse{}, err
 	}
 
-	apiEndpoint := a.getGCPDeleteEndpoint(project, region, req.ResourceType, req.ResourceName)
-	if apiEndpoint != "" {
-		httpReq, err := http.NewRequestWithContext(ctx, "GET", apiEndpoint, nil)
-		if err != nil {
-			return common.ResourceResponse{}, fmt.Errorf("failed to create GCP Read HTTP request: %w", err)
-		}
-		httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
-		resp, err := common.HTTPClient.Do(httpReq)
-		if err != nil {
-			return common.ResourceResponse{}, fmt.Errorf("GCP Read API request failed: %w", err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode >= 400 {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			return common.ResourceResponse{}, fmt.Errorf("GCP resource %s (%s) read error (status %d): %s", req.ResourceName, req.ResourceType, resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
-		}
+	apiEndpoint := getGCPReadEndpoint(project, region, req.ResourceType, req.ResourceName)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", apiEndpoint, nil)
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("failed to create GCP Read HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+accessToken)
+
+	/* #nosec G107 G704 */
+	resp, err := common.HTTPClient.Do(httpReq)
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("GCP Read API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return common.ResourceResponse{}, fmt.Errorf("%w: GCP resource %s not found", common.ErrNotFound, req.ResourceName)
+	}
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode >= 400 {
+		return common.ResourceResponse{}, fmt.Errorf("GCP API error (status %d) reading %s: %s", resp.StatusCode, req.ResourceName, common.SanitizeErrorBody(bodyBytes))
 	}
 
-	return common.ResourceResponse{ID: req.ResourceName, Status: "RUNNING"}, nil
+	respAttrs := buildGCPMockAttributes(region, req)
+	_ = json.Unmarshal(bodyBytes, &respAttrs)
+
+	return common.ResourceResponse{
+		ID:         req.ResourceName,
+		Status:     "RUNNING",
+		Attributes: respAttrs,
+	}, nil
 }
 
-func (a *GCPAdapter) UpdateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
+func (g *GCPAdapter) UpdateResource(ctx context.Context, req common.ResourceRequest) (common.ResourceResponse, error) {
 	project, _ := common.GetGCPProject(req)
 	region := common.GetRegion(req.Region, "us-central1")
-
-	ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
-	if err == nil {
-		token, err := ts.Token()
-		if err == nil && token.AccessToken != "" {
-			apiEndpoint, _, payload := a.getGCPEndpoint(project, region, req.ResourceType, req.ResourceName, req.Attributes)
-			if apiEndpoint != "" {
-				httpReq, err := http.NewRequestWithContext(ctx, "PATCH", apiEndpoint, bytes.NewBuffer(payload))
-				if err == nil {
-					httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
-					httpReq.Header.Set("Content-Type", "application/json")
-					resp, err := common.HTTPClient.Do(httpReq)
-					if err == nil {
-						defer resp.Body.Close()
-					}
-				}
-			}
-		}
+	if common.IsRequestMockMode(req) {
+		return common.ResourceResponse{
+			ID:         req.ResourceName,
+			Status:     "RUNNING",
+			Attributes: buildGCPMockAttributes(region, req),
+		}, nil
 	}
 
-	return common.ResourceResponse{ID: req.ResourceName, Status: "RUNNING"}, nil
+	accessToken, err := getGCPAccessToken(ctx, req)
+	if err != nil {
+		return common.ResourceResponse{}, err
+	}
+
+	apiEndpoint, payload := getGCPServiceEndpoint(project, region, req.ResourceType, req.ResourceName, req.Attributes)
+	httpReq, err := http.NewRequestWithContext(ctx, "PATCH", apiEndpoint, bytes.NewBuffer(payload))
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("failed to create GCP Update HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+accessToken)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	/* #nosec G107 G704 */
+	resp, err := common.HTTPClient.Do(httpReq)
+	if err != nil {
+		return common.ResourceResponse{}, fmt.Errorf("GCP Update API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return common.ResourceResponse{}, fmt.Errorf("GCP API error (status %d) updating %s: %s", resp.StatusCode, req.ResourceName, common.SanitizeErrorBody(bodyBytes))
+	}
+
+	return common.ResourceResponse{
+		ID:         req.ResourceName,
+		Status:     "RUNNING",
+		Attributes: buildGCPMockAttributes(region, req),
+	}, nil
 }
 
-func (a *GCPAdapter) DeleteResource(ctx context.Context, req common.ResourceRequest) error {
+func (g *GCPAdapter) DeleteResource(ctx context.Context, req common.ResourceRequest) error {
 	project, _ := common.GetGCPProject(req)
 	region := common.GetRegion(req.Region, "us-central1")
+	if common.IsRequestMockMode(req) {
+		return nil
+	}
 
-	ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
-	if err == nil {
-		token, err := ts.Token()
-		if err == nil && token.AccessToken != "" {
-			apiEndpoint := a.getGCPDeleteEndpoint(project, region, req.ResourceType, req.ResourceName)
-			if apiEndpoint != "" {
-				httpReq, err := http.NewRequestWithContext(ctx, "DELETE", apiEndpoint, nil)
-				if err != nil {
-					return fmt.Errorf("failed to create HTTP delete request: %w", err)
-				}
-				httpReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
-				resp, err := common.HTTPClient.Do(httpReq)
-				if err != nil {
-					return fmt.Errorf("GCP API delete request failed: %w", err)
-				}
-				defer resp.Body.Close()
-				if resp.StatusCode >= 400 && resp.StatusCode != 404 {
-					bodyBytes, _ := io.ReadAll(resp.Body)
-					return fmt.Errorf("GCP API delete error (status %d): %s", resp.StatusCode, common.SanitizeErrorBody(bodyBytes))
-				}
-			}
-		}
+	accessToken, err := getGCPAccessToken(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	apiEndpoint := getGCPDeleteEndpoint(project, region, req.ResourceType, req.ResourceName)
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", apiEndpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GCP Delete HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+accessToken)
+
+	/* #nosec G107 G704 */
+	resp, err := common.HTTPClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("GCP Delete API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("GCP API error (status %d) deleting %s: %s", resp.StatusCode, req.ResourceName, common.SanitizeErrorBody(bodyBytes))
 	}
 	return nil
 }

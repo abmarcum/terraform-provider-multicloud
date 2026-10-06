@@ -6,9 +6,10 @@ import (
 )
 
 var (
-	azureSanitizeRegex = regexp.MustCompile(`[^a-z0-9]`)
-	awsSanitizeRegex   = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
-	gcpSanitizeRegex   = regexp.MustCompile(`[^a-z0-9\-_]`)
+	azureSanitizeRegex   = regexp.MustCompile(`[^a-z0-9]`)
+	awsSanitizeRegex     = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
+	gcpSanitizeRegex     = regexp.MustCompile(`[^a-z0-9\-_]`)
+	defaultSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
 )
 
 // SanitizeResourceName applies cloud-specific naming constraints to raw resource names
@@ -20,11 +21,14 @@ func SanitizeResourceName(rawName string, providerType string, resourceType stri
 
 	p := strings.ToLower(providerType)
 
-	// Hardened Path Traversal Protection: Strip parent directory references
-	name = strings.ReplaceAll(name, "../", "")
-	name = strings.ReplaceAll(name, "..\\", "")
-	name = strings.ReplaceAll(name, "/", "")
-	name = strings.ReplaceAll(name, "\\", "")
+	// Hardened Path Traversal Protection: Recursively strip parent directory references and path separators
+	for strings.Contains(name, "..") || strings.ContainsAny(name, "/\\") {
+		name = strings.ReplaceAll(name, "../", "")
+		name = strings.ReplaceAll(name, "..\\", "")
+		name = strings.ReplaceAll(name, "..", "")
+		name = strings.ReplaceAll(name, "/", "")
+		name = strings.ReplaceAll(name, "\\", "")
+	}
 	name = strings.TrimSpace(name)
 
 	if name == "" {
@@ -73,6 +77,15 @@ func SanitizeResourceName(rawName string, providerType string, resourceType stri
 			}
 			return name
 		}
+	}
+
+	name = defaultSanitizeRegex.ReplaceAllString(name, "")
+	name = strings.Trim(name, ".-_")
+	if name == "" {
+		return "multicloud-resource"
+	}
+	if len(name) > 128 {
+		name = name[:128]
 	}
 
 	return name

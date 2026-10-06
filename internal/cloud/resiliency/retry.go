@@ -5,8 +5,15 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"regexp"
 	"strings"
 	"time"
+)
+
+var (
+	bearerTokenRegex = regexp.MustCompile(`(?i)(Bearer\s+)[^\s"',;]+`)
+	awsSigV4Regex    = regexp.MustCompile(`(AWS4-HMAC-SHA256)\s+[^\r\n"']+`)
+	secretParamRegex = regexp.MustCompile(`(?i)((?:client_secret|access_token|secret_key|aws_secret_access_key|api_key|x-amz-security-token)\s*[=:]\s*["']?)[^\s"',;&]+`)
 )
 
 // IsRetryableError returns true if the error indicates a transient cloud API error
@@ -88,20 +95,25 @@ func ExecuteWithRetry[T any](ctx context.Context, operation func() (T, error)) (
 	return zero, RedactSensitiveLogInfo(lastErr)
 }
 
+// RedactSensitiveString strips authorization headers, signatures, and secret parameters from raw strings
+func RedactSensitiveString(msg string) string {
+	if msg == "" {
+		return ""
+	}
+	msg = bearerTokenRegex.ReplaceAllString(msg, "${1}[REDACTED]")
+	msg = awsSigV4Regex.ReplaceAllString(msg, "${1} [REDACTED]")
+	msg = secretParamRegex.ReplaceAllString(msg, "${1}[REDACTED]")
+	return msg
+}
+
 // RedactSensitiveLogInfo strips authorization headers and tokens from log messages
 func RedactSensitiveLogInfo(err error) error {
 	if err == nil {
 		return nil
 	}
-	msg := err.Error()
-
-	// Redact bearer tokens or access keys if present
-	if strings.Contains(msg, "Bearer ") {
-		msg = strings.Split(msg, "Bearer ")[0] + "Bearer [REDACTED]"
+	redacted := RedactSensitiveString(err.Error())
+	if redacted == err.Error() {
+		return err
 	}
-	if strings.Contains(msg, "AWS4-HMAC-SHA256") {
-		msg = strings.Split(msg, "AWS4-HMAC-SHA256")[0] + "AWS4-HMAC-SHA256 [REDACTED]"
-	}
-
-	return errors.New(msg)
+	return errors.New(redacted)
 }

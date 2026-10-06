@@ -111,13 +111,36 @@ resource "multicloud_virtual_machine" "app_server" {
 During `terraform plan`, the provider automatically executes pre-apply checks:
 
 1. **CIS Benchmarks Auditor (`security_auditor.go`)**: Warns if a storage bucket is unencrypted or if a virtual machine is publicly exposed to `0.0.0.0/0`.
-2. **Pre-Apply Monthly Cost Estimator (`cost_estimator.go`)**: Queries live public pricing APIs (Azure Retail REST API, AWS, GCP) with 2-second timeout and offline fallback resiliency to calculate monthly USD costs.
-3. **Cost Optimization Advisor (`cost_optimizer.go`)**: Suggests Arm-based Graviton / Tau / Ampere instances for 20-30% cost savings.
+2. **Pre-Apply Monthly Cost Estimator (`cost_estimator.go`)**: Queries live public pricing APIs (Azure Retail REST API, AWS `AWS_PRICING_OFFER_URL`, GCP `GCP_BILLING_API_KEY`) with TTL caching and offline fallback resiliency to calculate monthly USD costs across all 70 resources.
+3. **Cost Optimization Advisor (`cost_optimizer.go`)**: Suggests Arm64-based AWS Graviton3 (`t4g.*`), GCP Ampere Altra (`t2a-standard-*`), and Azure Cobalt 100 (`Standard_D*ps_v6`) instances for 20-30% cost savings.
 4. **Secret Scanner (`secret_scanner.go`)**: Blocks hardcoded AWS secret keys, RSA private keys, and GCP service account JSON keys.
+5. **Custom OPA Rego Policies (`opa_engine.go`)**: Point `export OPA_POLICY_PATH=/path/to/policies.rego` to evaluate custom `deny[msg]` and `violation[msg]` rules during `terraform plan`.
+6. **OpenTelemetry Exporter (`telemetry.go`)**: Set `export OTEL_EXPORTER_OTLP_ENDPOINT=https://otel-collector:4318/v1/logs` to stream structured provision/read/update/delete events.
 
 ---
 
-## 4. Migrating Existing AWS, GCP, and Azure Infrastructure (`tf-migrate`)
+## 4. Data Sources (`multicloud_resource` & `multicloud_cost_estimate`)
+
+Query existing cloud resources or pre-calculate FinOps estimates directly in HCL:
+
+```hcl
+data "multicloud_resource" "shared_bucket" {
+  provider_type = "aws"
+  resource_type = "storage_bucket"
+  resource_name = "company-shared-assets"
+  region        = "us-west-2"
+}
+
+data "multicloud_cost_estimate" "vm_estimate" {
+  provider_type = "gcp"
+  resource_type = "virtual_machine"
+  size_tier     = "large"
+}
+```
+
+---
+
+## 5. Migrating Existing AWS, GCP, and Azure Infrastructure (`tf-migrate`)
 
 Use the included **`tf-migrate` CLI tool** to convert existing legacy AWS (`aws_*`), GCP (`google_*`), and Azure (`azurerm_*`) `.tf` files into unified `multicloud_*` definitions. `tf-migrate` automatically extracts provider-specific properties into `extra_config` blocks and generates `.tfstate` migration scripts:
 

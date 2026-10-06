@@ -85,8 +85,12 @@ func (p *MulticloudProvider) Configure(ctx context.Context, req provider.Configu
 		return
 	}
 
-	if !data.MockMode.IsNull() && !data.MockMode.IsUnknown() && data.MockMode.ValueBool() {
-		_ = os.Setenv("MULTICLOUD_MOCK_MODE", "true")
+	if !data.MockMode.IsNull() && !data.MockMode.IsUnknown() {
+		if data.MockMode.ValueBool() {
+			_ = os.Setenv("MULTICLOUD_MOCK_MODE", "true")
+		} else {
+			_ = os.Setenv("MULTICLOUD_MOCK_MODE", "false")
+		}
 	}
 
 	clientManager, err := NewClientManager(ctx, data)
@@ -161,9 +165,23 @@ func (p *MulticloudProvider) Resources(ctx context.Context) []func() resource.Re
 		resources.NewStorageInventoryReportResource,
 		resources.NewWorkloadIdentityPoolResource,
 		resources.NewStorageTransferJobResource,
+		resources.NewBlockVolumeResource,
+		resources.NewSharedFilesystemResource,
+		resources.NewTLSCertificateResource,
+		resources.NewWorkflowResource,
+		resources.NewBatchComputeResource,
+		resources.NewBackupVaultResource,
+		resources.NewDistributedTracingResource,
+		resources.NewBudgetAlertResource,
+		resources.NewVectorIndexResource,
+		resources.NewServiceMeshResource,
 	}
 }
 
 func (p *MulticloudProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		resources.NewCloudResourceDataSource,
+		resources.NewCostEstimateDataSource,
+	}
 }
+

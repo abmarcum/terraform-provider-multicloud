@@ -2,7 +2,7 @@ package resources
 
 import (
 	"context"
-	"fmt"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -101,7 +101,21 @@ func (r *DNSHealthCheckResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/dnscheck/%s", providerType, plan.CheckName.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "dns_health_check", plan.CheckName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -109,6 +123,9 @@ func (r *DNSHealthCheckResource) Read(ctx context.Context, req resource.ReadRequ
 	var state DNSHealthCheckModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "dns_health_check", state.CheckName.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -120,6 +137,9 @@ func (r *DNSHealthCheckResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "dns_health_check", plan.CheckName.ValueString(), plan.ExtraConfig, nil, resp) {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -129,6 +149,7 @@ func (r *DNSHealthCheckResource) Delete(ctx context.Context, req resource.Delete
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "dns_health_check", state.CheckName.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *DNSHealthCheckResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

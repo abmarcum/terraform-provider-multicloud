@@ -93,13 +93,23 @@ func loadResources(statePath string) []ResourceSample {
 						} else if nameAttr, ok := inst.Attributes["balancer_name"].(string); ok && nameAttr != "" {
 							resName = nameAttr
 						}
+						isPublic := false
+						if pub, ok := inst.Attributes["associate_public_ip"].(bool); ok {
+							isPublic = pub
+						} else if pubBlock, ok := inst.Attributes["public_access_block"].(bool); ok {
+							isPublic = !pubBlock
+						}
+						isEncrypted := true
+						if enc, ok := inst.Attributes["encryption_enabled"].(bool); ok {
+							isEncrypted = enc
+						}
 						parsed = append(parsed, ResourceSample{
 							Name:      resName,
 							Provider:  pType,
 							Type:      cleanType,
 							Tier:      tier,
-							Public:    false,
-							Encrypted: true,
+							Public:    isPublic,
+							Encrypted: isEncrypted,
 						})
 					}
 				}
@@ -109,7 +119,77 @@ func loadResources(statePath string) []ResourceSample {
 			}
 		}
 	}
+
+	if hclResources := loadResourcesFromHCL("."); len(hclResources) > 0 {
+		return hclResources
+	}
 	return sampleResources
+}
+
+func loadResourcesFromHCL(dir string) []ResourceSample {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var parsed []ResourceSample
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".tf") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		/* #nosec G304 */
+		content, err := os.ReadFile(filepath.Clean(path))
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(content), "\n")
+		var cur *ResourceSample
+		for _, rawLine := range lines {
+			line := strings.TrimSpace(rawLine)
+			if strings.HasPrefix(line, "resource \"multicloud_") {
+				parts := strings.Split(line, "\"")
+				if len(parts) >= 4 {
+					rType := strings.TrimPrefix(parts[1], "multicloud_")
+					rName := parts[3]
+					cur = &ResourceSample{
+						Name:      rName,
+						Provider:  "gcp",
+						Type:      rType,
+						Encrypted: true,
+					}
+				}
+				continue
+			}
+			if cur != nil {
+				if line == "}" {
+					parsed = append(parsed, *cur)
+					cur = nil
+					continue
+				}
+				if idx := strings.Index(line, "="); idx > 0 {
+					key := strings.TrimSpace(line[:idx])
+					val := strings.Trim(strings.TrimSpace(line[idx+1:]), "\"")
+					switch key {
+					case "provider_type":
+						cur.Provider = val
+					case "size_tier":
+						cur.Tier = val
+					case "bucket_name", "vm_name", "instance_name", "function_name", "balancer_name":
+						if val != "" {
+							cur.Name = val
+						}
+					case "associate_public_ip":
+						cur.Public = (val == "true")
+					case "public_access_block":
+						cur.Public = (val == "false")
+					case "encryption_enabled":
+						cur.Encrypted = (val != "false")
+					}
+				}
+			}
+		}
+	}
+	return parsed
 }
 
 func formatProviderBadge(provider string) string {
@@ -159,7 +239,7 @@ func main() {
 		case "4":
 			renderSummary()
 		case "5", "q", "quit", "exit":
-			fmt.Sprintf("%sExiting Interactive Infrastructure Inspector. Goodbye!%s\n", Dim, Reset)
+			fmt.Printf("%sExiting Interactive Infrastructure Inspector. Goodbye!%s\n", Dim, Reset)
 			return
 		default:
 			fmt.Printf("%sInvalid choice. Please select an option between 1 and 5.%s\n", Red, Reset)

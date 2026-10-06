@@ -7,6 +7,9 @@ on:
       - '**.md'
       - 'docs/**'
 
+permissions:
+  contents: read
+
 jobs:
   acceptance-tests:
     name: Plugin Framework Acceptance Matrix

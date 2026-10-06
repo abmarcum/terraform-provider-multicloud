@@ -1,6 +1,6 @@
 # Multi-Cloud Terraform Provider (`terraform-provider-multicloud`) Resources Reference Manual
 
-This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **60 unified resources** provided by `terraform-provider-multicloud`.
+This technical manual details the complete schema attributes, required/optional parameters, read-only values, cloud targets, and `extra_config` escape hatches for all **70 unified resources** and **2 data sources** provided by `terraform-provider-multicloud`.
 
 ---
 
@@ -620,6 +620,195 @@ Unified edge serverless PoP code execution function.
   - `function_name` (String, Required) - Edge function name.
   - `runtime` (String, Optional) - Execution runtime (js-1.0, nodejs20).
   - `code_content` (String, Required) - Edge function code content.
+
+### `multicloud_global_anycast_ip`
+Unified global anycast static IP address and edge accelerator.
+- **AWS Target:** `aws_globalaccelerator_accelerator`
+- **GCP Target:** `google_compute_global_address`
+- **Azure Target:** `azurerm_traffic_manager_profile`
+- **Attributes:**
+  - `name` (String, Required) - Global anycast IP identifier.
+  - `ip_version` (String, Optional) - `'IPV4'` or `'IPV6'`.
+  - `ip_address` (String, Read-Only) - Allocated global anycast IP address.
+  - `dns_name` (String, Read-Only) - Global routing DNS name.
+
+### `multicloud_custom_machine_type`
+Unified custom vCPU and memory compute specification.
+- **AWS Target:** `aws_launch_template`
+- **GCP Target:** `google_compute_instance` (`custom-vCPU-RAM`)
+- **Azure Target:** `azurerm_linux_virtual_machine`
+- **Attributes:**
+  - `name` (String, Required) - Custom machine name.
+  - `vcpus` (Int64, Required) - Custom vCPU core count.
+  - `memory_mb` (Int64, Required) - Custom RAM allocation in MB.
+  - `machine_type_spec` (String, Read-Only) - Formatted custom machine type string.
+
+### `multicloud_storage_inventory_report`
+Unified object storage bucket inventory and audit report configuration.
+- **AWS Target:** `aws_s3_bucket_inventory`
+- **GCP Target:** `google_storage_inventory_report_config`
+- **Azure Target:** `azurerm_storage_blob_inventory_policy`
+- **Attributes:**
+  - `name` (String, Required) - Report configuration name.
+  - `bucket_name` (String, Required) - Target bucket to audit.
+  - `destination_bucket` (String, Required) - Destination bucket for inventory reports.
+  - `format` (String, Optional) - `'CSV'`, `'PARQUET'`, or `'ORC'`.
+  - `schedule_frequency` (String, Optional) - `'DAILY'` or `'WEEKLY'`.
+
+### `multicloud_workload_identity_pool`
+Unified keyless OIDC workload identity federation pool.
+- **AWS Target:** `aws_iam_openid_connect_provider`
+- **GCP Target:** `google_iam_workload_identity_pool`
+- **Azure Target:** `azurerm_federated_identity_credential`
+- **Attributes:**
+  - `pool_name` (String, Required) - Workload identity pool name.
+  - `issuer_url` (String, Required) - OIDC token issuer URL.
+  - `allowed_audiences` (List[String], Optional) - Allowed client IDs.
+  - `description` (String, Optional) - Pool description.
+  - `disabled` (Bool, Optional) - Disable pool state.
+
+### `multicloud_storage_transfer_job`
+Unified cross-cloud batch object storage transfer job.
+- **AWS Target:** `aws_datasync_task`
+- **GCP Target:** `google_storage_transfer_job`
+- **Azure Target:** `azurerm_storage_sync`
+- **Attributes:**
+  - `job_name` (String, Required) - Transfer job name.
+  - `source_bucket` (String, Required) - Source bucket name.
+  - `destination_bucket` (String, Required) - Destination bucket name.
+  - `schedule_start_time` (String, Optional) - ISO-8601 start time.
+  - `overwrite_objects` (Bool, Optional) - Overwrite existing destination objects.
+
+### `multicloud_block_volume`
+Unified persistent block storage volume.
+- **AWS Target:** `aws_ebs_volume`
+- **GCP Target:** `google_compute_disk`
+- **Azure Target:** `azurerm_managed_disk`
+- **Attributes:**
+  - `volume_name` (String, Required) - Volume name.
+  - `size_gb` (Int64, Required) - Volume size in GB.
+  - `volume_type` (String, Optional) - `'ssd'`, `'hdd'`, or `'nvme'`.
+  - `iops` (Int64, Optional) - Provisioned IOPS.
+  - `encryption_enabled` (Bool, Optional) - Enable disk encryption at rest.
+
+### `multicloud_shared_filesystem`
+Unified shared NFS/SMB network filesystem.
+- **AWS Target:** `aws_efs_file_system`
+- **GCP Target:** `google_filestore_instance`
+- **Azure Target:** `azurerm_storage_share`
+- **Attributes:**
+  - `filesystem_name` (String, Required) - Shared filesystem name.
+  - `protocol` (String, Optional) - `'NFSv4'` or `'SMB'`.
+  - `performance_mode` (String, Optional) - `'generalPurpose'` or `'maxIO'`.
+  - `encryption_enabled` (Bool, Optional) - Enable encryption at rest.
+
+### `multicloud_tls_certificate`
+Unified managed X.509 SSL/TLS certificate.
+- **AWS Target:** `aws_acm_certificate`
+- **GCP Target:** `google_certificate_manager_certificate`
+- **Azure Target:** `azurerm_key_vault_certificate`
+- **Attributes:**
+  - `cert_name` (String, Required) - Certificate name.
+  - `domain_name` (String, Required) - Primary FQDN domain name.
+  - `validation_method` (String, Optional) - `'DNS'` or `'EMAIL'`.
+  - `auto_renew` (Bool, Optional) - Enable automated renewal.
+
+### `multicloud_workflow`
+Unified serverless workflow state machine orchestration.
+- **AWS Target:** `aws_sfn_state_machine`
+- **GCP Target:** `google_workflows_workflow`
+- **Azure Target:** `azurerm_logic_app_workflow`
+- **Attributes:**
+  - `workflow_name` (String, Required) - Workflow name.
+  - `definition` (String, Required) - State machine JSON/YAML definition.
+  - `workflow_type` (String, Optional) - `'STANDARD'` or `'EXPRESS'`.
+
+### `multicloud_batch_compute`
+Unified managed batch compute environment and job pool.
+- **AWS Target:** `aws_batch_compute_environment`
+- **GCP Target:** `google_batch_job`
+- **Azure Target:** `azurerm_batch_pool`
+- **Attributes:**
+  - `environment_name` (String, Required) - Batch environment name.
+  - `max_vcpus` (Int64, Required) - Maximum vCPU capacity.
+  - `compute_type` (String, Optional) - `'EC2'`, `'FARGATE'`, or `'SPOT'`.
+
+### `multicloud_backup_vault`
+Unified disaster recovery backup vault with optional WORM lock.
+- **AWS Target:** `aws_backup_vault`
+- **GCP Target:** `google_backup_dr_backup_vault`
+- **Azure Target:** `azurerm_data_protection_backup_vault`
+- **Attributes:**
+  - `vault_name` (String, Required) - Backup vault name.
+  - `retention_days` (Int64, Optional) - Retention window in days.
+  - `immutable_lock` (Bool, Optional) - Enable WORM lock.
+  - `encryption_enabled` (Bool, Optional) - Enable KMS encryption.
+
+### `multicloud_distributed_tracing`
+Unified distributed tracing and APM configuration.
+- **AWS Target:** `aws_xray_sampling_rule`
+- **GCP Target:** `google_cloud_trace_config`
+- **Azure Target:** `azurerm_application_insights`
+- **Attributes:**
+  - `tracing_name` (String, Required) - Tracing rule or workspace name.
+  - `sampling_rate` (Float64, Optional) - Sampling ratio (`0.0` to `1.0`).
+  - `retention_days` (Int64, Optional) - Trace retention in days.
+
+### `multicloud_budget_alert`
+Unified FinOps monthly cost budget and alert threshold policy.
+- **AWS Target:** `aws_budgets_budget`
+- **GCP Target:** `google_billing_budget`
+- **Azure Target:** `azurerm_consumption_budget_subscription`
+- **Attributes:**
+  - `budget_name` (String, Required) - Budget name.
+  - `monthly_limit_usd` (Float64, Required) - Monthly USD spend cap.
+  - `alert_threshold_pct` (Int64, Optional) - Alert trigger percentage.
+  - `notification_email` (String, Optional) - Alert email recipient.
+
+### `multicloud_vector_index`
+Unified AI vector database similarity search index.
+- **AWS Target:** `aws_opensearchserverless_collection`
+- **GCP Target:** `google_vertex_ai_index`
+- **Azure Target:** `azurerm_search_service`
+- **Attributes:**
+  - `index_name` (String, Required) - Vector index name.
+  - `dimensions` (Int64, Required) - Embedding dimensionality (e.g. `1536`).
+  - `distance_metric` (String, Optional) - `'COSINE'`, `'DOT_PRODUCT'`, or `'EUCLIDEAN'`.
+
+### `multicloud_service_mesh`
+Unified L7 service mesh control plane.
+- **AWS Target:** `aws_appmesh_mesh`
+- **GCP Target:** `google_network_services_mesh`
+- **Azure Target:** `azurerm_kubernetes_fleet_manager`
+- **Attributes:**
+  - `mesh_name` (String, Required) - Service mesh name.
+  - `mtls_mode` (String, Optional) - `'STRICT'` or `'PERMISSIVE'`.
+  - `egress_filter` (String, Optional) - `'ALLOW_ALL'` or `'DROP_ALL'`.
+
+---
+
+## 9. Data Sources
+
+### `data "multicloud_resource"`
+Reads live or mock state and attributes for an existing cloud resource.
+- **Attributes:**
+  - `provider_type` (String, Required) - `'aws'`, `'gcp'`, or `'azure'`.
+  - `resource_type` (String, Required) - Unified resource type name.
+  - `resource_name` (String, Required) - Upstream resource identifier.
+  - `region` (String, Optional) - Target cloud region.
+  - `status` (String, Read-Only) - Upstream resource status.
+  - `attributes` (Map[String], Read-Only) - Upstream resource attributes.
+
+### `data "multicloud_cost_estimate"`
+Calculates pre-apply monthly USD costs and Arm64 optimization savings.
+- **Attributes:**
+  - `provider_type` (String, Required) - `'aws'`, `'gcp'`, or `'azure'`.
+  - `resource_type` (String, Required) - Unified resource type name.
+  - `size_tier` (String, Optional) - `'small'`, `'medium'`, `'large'`, or explicit SKU.
+  - `monthly_cost` (Float64, Read-Only) - Estimated monthly spend in USD.
+  - `suggested_tier` (String, Read-Only) - Suggested Arm64 SKU.
+  - `estimated_saving` (Float64, Read-Only) - Monthly USD savings.
+  - `optimization_note` (String, Read-Only) - FinOps optimization guidance.
 
 
 

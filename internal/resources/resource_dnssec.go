@@ -2,7 +2,7 @@ package resources
 
 import (
 	"context"
-	"fmt"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -85,7 +85,21 @@ func (r *DNSSECResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	providerType := strings.ToLower(plan.ProviderType.ValueString())
-	plan.ID = types.StringValue(fmt.Sprintf("%s/dnssec/%s", providerType, plan.ZoneID.ValueString()))
+	reg := ""
+	if !plan.Region.IsNull() && !plan.Region.IsUnknown() {
+		reg = plan.Region.ValueString()
+	} else {
+		plan.Region = types.StringNull()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "dnssec", plan.ZoneID.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	if err != nil {
+		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
+		return
+	}
+	plan.ID = types.StringValue(res.ID)
+	if plan.ExtraConfig.IsUnknown() {
+		plan.ExtraConfig = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -93,6 +107,9 @@ func (r *DNSSECResource) Read(ctx context.Context, req resource.ReadRequest, res
 	var state DNSSECModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !readResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "dnssec", state.ZoneID.ValueString(), state.ExtraConfig, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -104,6 +121,9 @@ func (r *DNSSECResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "dnssec", plan.ZoneID.ValueString(), plan.ExtraConfig, nil, resp) {
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -113,6 +133,7 @@ func (r *DNSSECResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	deleteResourceLifecycle(ctx, r.clientManager, state.ProviderType, state.Region, "dnssec", state.ZoneID.ValueString(), state.ExtraConfig, resp)
 }
 
 func (r *DNSSECResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

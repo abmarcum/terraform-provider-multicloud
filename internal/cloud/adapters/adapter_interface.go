@@ -2,16 +2,28 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/aws"
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/azure"
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/common"
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters/gcp"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/resiliency"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/sanitizer"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/security"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/telemetry"
 )
 
 type ResourceRequest = common.ResourceRequest
 type ResourceResponse = common.ResourceResponse
+type AWSAdapter = aws.AWSAdapter
+type GCPAdapter = gcp.GCPAdapter
+type AzureAdapter = azure.AzureAdapter
+type ClientConfigProvider = common.ClientConfigProvider
+
+var ErrNotFound = common.ErrNotFound
 
 type CloudAdapter interface {
 	CreateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error)
@@ -20,59 +32,160 @@ type CloudAdapter interface {
 	DeleteResource(ctx context.Context, req ResourceRequest) error
 }
 
-type AWSAdapter = aws.AWSAdapter
-type GCPAdapter = gcp.GCPAdapter
-type AzureAdapter = azure.AzureAdapter
+var (
+	awsAdapterInstance   = &aws.AWSAdapter{}
+	gcpAdapterInstance   = &gcp.GCPAdapter{}
+	azureAdapterInstance = &azure.AzureAdapter{}
+)
 
-func CreateCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string, extraAttrs map[string]interface{}) (ResourceResponse, error) {
-	adapter := getAdapter(providerType)
-	return adapter.CreateResource(ctx, ResourceRequest{
-		ResourceName: resourceName,
-		ResourceType: resourceType,
-		ProviderType: providerType,
-		Region:       region,
-		Attributes:   extraAttrs,
-	})
-}
-
-func ReadCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string) (ResourceResponse, error) {
-	adapter := getAdapter(providerType)
-	return adapter.ReadResource(ctx, ResourceRequest{
-		ResourceName: resourceName,
-		ResourceType: resourceType,
-		ProviderType: providerType,
-		Region:       region,
-	})
-}
-
-func UpdateCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string, extraAttrs map[string]interface{}) (ResourceResponse, error) {
-	adapter := getAdapter(providerType)
-	return adapter.UpdateResource(ctx, ResourceRequest{
-		ResourceName: resourceName,
-		ResourceType: resourceType,
-		ProviderType: providerType,
-		Region:       region,
-		Attributes:   extraAttrs,
-	})
-}
-
-func DeleteCloudResource(ctx context.Context, providerType string, resourceType string, resourceName string, region string) error {
-	adapter := getAdapter(providerType)
-	return adapter.DeleteResource(ctx, ResourceRequest{
-		ResourceName: resourceName,
-		ResourceType: resourceType,
-		ProviderType: providerType,
-		Region:       region,
-	})
-}
-
-func getAdapter(providerType string) CloudAdapter {
-	switch strings.ToLower(providerType) {
+func GetAdapter(provider string) (CloudAdapter, error) {
+	switch strings.ToLower(provider) {
 	case "aws":
-		return &aws.AWSAdapter{}
+		return awsAdapterInstance, nil
+	case "gcp":
+		return gcpAdapterInstance, nil
 	case "azure":
-		return &azure.AzureAdapter{}
+		return azureAdapterInstance, nil
 	default:
-		return &gcp.GCPAdapter{}
+		return nil, fmt.Errorf("unsupported cloud provider: %s", provider)
 	}
+}
+
+func validatePreApplySecurity(provider, resType, cleanName string, extraAttrs map[string]interface{}) error {
+	violations := security.ValidatePolicy(resType, cleanName, extraAttrs)
+	if len(violations) > 0 {
+		return fmt.Errorf("security policy violation [%s]: %s", violations[0].RuleName, violations[0].Message)
+	}
+
+	for k, v := range extraAttrs {
+		if k == "aws_secret_key" || k == "gcp_credentials" || k == "azure_client_secret" || k == "azure_bearer_token" {
+			continue
+		}
+		if strVal, ok := v.(string); ok && strVal != "" {
+			findings := security.ScanForSecretLeaks(provider, cleanName, strVal)
+			if len(findings) > 0 {
+				return fmt.Errorf("pre-apply secret scanner blocked provisioning: %s", findings[0].Message)
+			}
+		}
+	}
+	return nil
+}
+
+func CreateCloudResource(ctx context.Context, provider, resType, name, region string, extraAttrs map[string]interface{}) (ResourceResponse, error) {
+	start := time.Now()
+	adapter, err := GetAdapter(provider)
+	if err != nil {
+		return ResourceResponse{}, err
+	}
+
+	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	if err := validatePreApplySecurity(provider, resType, cleanName, extraAttrs); err != nil {
+		return ResourceResponse{}, err
+	}
+
+	req := ResourceRequest{
+		ResourceName: cleanName,
+		ResourceType: resType,
+		ProviderType: provider,
+		Region:       region,
+		Attributes:   extraAttrs,
+	}
+	resp, err := resiliency.ExecuteWithRetry(ctx, func() (ResourceResponse, error) {
+		return adapter.CreateResource(ctx, req)
+	})
+	_, _ = telemetry.DefaultExporter.RecordEvent("PROVISION", provider, cleanName, time.Since(start), map[string]interface{}{
+		"resource_type": resType,
+		"success":       err == nil,
+	})
+	return resp, err
+}
+
+func ReadCloudResource(ctx context.Context, provider, resType, name, region string) (ResourceResponse, error) {
+	return ReadCloudResourceWithAttrs(ctx, provider, resType, name, region, nil)
+}
+
+func ReadCloudResourceWithAttrs(ctx context.Context, provider, resType, name, region string, extraAttrs map[string]interface{}) (ResourceResponse, error) {
+	start := time.Now()
+	adapter, err := GetAdapter(provider)
+	if err != nil {
+		return ResourceResponse{}, err
+	}
+
+	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	req := ResourceRequest{
+		ResourceName: cleanName,
+		ResourceType: resType,
+		ProviderType: provider,
+		Region:       region,
+		Attributes:   extraAttrs,
+	}
+	resp, err := resiliency.ExecuteWithRetry(ctx, func() (ResourceResponse, error) {
+		return adapter.ReadResource(ctx, req)
+	})
+	_, _ = telemetry.DefaultExporter.RecordEvent("READ", provider, cleanName, time.Since(start), map[string]interface{}{
+		"resource_type": resType,
+		"success":       err == nil,
+	})
+	return resp, err
+}
+
+func UpdateCloudResource(ctx context.Context, provider, resType, name, region string, extraAttrs map[string]interface{}) (ResourceResponse, error) {
+	start := time.Now()
+	adapter, err := GetAdapter(provider)
+	if err != nil {
+		return ResourceResponse{}, err
+	}
+
+	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	if err := validatePreApplySecurity(provider, resType, cleanName, extraAttrs); err != nil {
+		return ResourceResponse{}, err
+	}
+
+	req := ResourceRequest{
+		ResourceName: cleanName,
+		ResourceType: resType,
+		ProviderType: provider,
+		Region:       region,
+		Attributes:   extraAttrs,
+	}
+	resp, err := resiliency.ExecuteWithRetry(ctx, func() (ResourceResponse, error) {
+		return adapter.UpdateResource(ctx, req)
+	})
+	_, _ = telemetry.DefaultExporter.RecordEvent("UPDATE", provider, cleanName, time.Since(start), map[string]interface{}{
+		"resource_type": resType,
+		"success":       err == nil,
+	})
+	return resp, err
+}
+
+func DeleteCloudResource(ctx context.Context, provider, resType, name, region string) error {
+	return DeleteCloudResourceWithAttrs(ctx, provider, resType, name, region, nil)
+}
+
+func DeleteCloudResourceWithAttrs(ctx context.Context, provider, resType, name, region string, extraAttrs map[string]interface{}) error {
+	start := time.Now()
+	adapter, err := GetAdapter(provider)
+	if err != nil {
+		return err
+	}
+
+	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	req := ResourceRequest{
+		ResourceName: cleanName,
+		ResourceType: resType,
+		ProviderType: provider,
+		Region:       region,
+		Attributes:   extraAttrs,
+	}
+	_, err = resiliency.ExecuteWithRetry(ctx, func() (bool, error) {
+		if delErr := adapter.DeleteResource(ctx, req); delErr != nil {
+			return false, delErr
+		}
+		return true, nil
+	})
+	_, _ = telemetry.DefaultExporter.RecordEvent("DELETE", provider, cleanName, time.Since(start), map[string]interface{}{
+		"resource_type": resType,
+		"success":       err == nil,
+	})
+	return err
 }

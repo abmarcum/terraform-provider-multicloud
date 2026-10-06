@@ -23,3 +23,14 @@ func TestSanitizeResourceNameShortLength(t *testing.T) {
 		t.Errorf("expected sanitized azure storage name to be >= 3 chars, got '%s'", sanitized)
 	}
 }
+
+func TestSanitizeResourceNameNestedTraversalAndNonStorage(t *testing.T) {
+	// Nested traversal bypass attempt ("....//") and query/fragment injection on non-storage resource
+	raw := "....//....//admin?override=true#frag"
+	sanitized := SanitizeResourceName(raw, "gcp", "virtual_machine")
+
+	if sanitized != "adminoverridetruefrag" {
+		t.Errorf("expected nested traversal and URL chars to be stripped, got %q", sanitized)
+	}
+}
+
