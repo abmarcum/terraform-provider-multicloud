@@ -13,7 +13,7 @@ import (
 var (
 	bearerTokenRegex = regexp.MustCompile(`(?i)(Bearer\s+)[^\s"',;]+`)
 	awsSigV4Regex    = regexp.MustCompile(`(AWS4-HMAC-SHA256)\s+[^\r\n"']+`)
-	secretParamRegex = regexp.MustCompile(`(?i)((?:client_secret|access_token|secret_key|aws_secret_access_key|api_key|x-amz-security-token)\s*[=:]\s*["']?)[^\s"',;&]+`)
+	secretParamRegex = regexp.MustCompile(`(?i)((?:client_secret|access_token|refresh_token|secret_key|aws_secret_access_key|api_key|password|private_key|x-amz-security-token)["']?\s*[=:]\s*["']?)[^\s"',;&}]+`)
 )
 
 // IsRetryableError returns true if the error indicates a transient cloud API error
