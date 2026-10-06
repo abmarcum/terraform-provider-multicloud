@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/adapters"
+	"github.com/abmarcum/multi-cloud-provider/internal/cloud/sanitizer"
 	"github.com/abmarcum/multi-cloud-provider/internal/cloud/security"
 )
 
@@ -45,7 +46,7 @@ func evaluateStateDrift(ctx context.Context, statePath string) []DriftReport {
 	}
 
 	if statePath != "" {
-		/* #nosec G304 */
+		/* #nosec G304 G703 */
 		if raw, err := os.ReadFile(filepath.Clean(statePath)); err == nil {
 			var parsed tfStateFile
 			if err := json.Unmarshal(raw, &parsed); err == nil && len(parsed.Resources) > 0 {
@@ -54,12 +55,14 @@ func evaluateStateDrift(ctx context.Context, statePath string) []DriftReport {
 					if res.Mode != "managed" || !strings.HasPrefix(res.Type, "multicloud_") {
 						continue
 					}
-					cleanType := strings.TrimPrefix(res.Type, "multicloud_")
+					cleanType := sanitizer.StripControlChars(strings.TrimPrefix(res.Type, "multicloud_"))
+					cleanName := sanitizer.SanitizeResourceName(res.Name, "aws", cleanType)
 					for _, inst := range res.Instances {
 						pType, _ := inst.Attributes["provider_type"].(string)
 						if pType == "" {
 							pType = "aws"
 						}
+						pType = sanitizer.SanitizeCloudIdentifier(pType, "aws")
 						reg, _ := inst.Attributes["region"].(string)
 						isPublic, _ := inst.Attributes["associate_public_ip"].(bool)
 						isEncrypted := true
@@ -67,11 +70,11 @@ func evaluateStateDrift(ctx context.Context, statePath string) []DriftReport {
 							isEncrypted = enc
 						}
 
-						fullAddr := fmt.Sprintf("%s.%s", res.Type, res.Name)
-						_, readErr := adapters.ReadCloudResourceWithAttrs(ctx, pType, cleanType, res.Name, reg, map[string]interface{}{
+						fullAddr := fmt.Sprintf("multicloud_%s.%s", cleanType, cleanName)
+						_, readErr := adapters.ReadCloudResourceWithAttrs(ctx, pType, cleanType, cleanName, reg, map[string]interface{}{
 							"mock_mode": true,
 						})
-						findings := security.AuditResource(pType, cleanType, res.Name, isPublic, isEncrypted)
+						findings := security.AuditResource(pType, cleanType, cleanName, isPublic, isEncrypted)
 						if readErr != nil {
 							reports = append(reports, DriftReport{
 								ResourceName: fullAddr,
@@ -159,7 +162,7 @@ func main() {
 		}
 		data, err := json.MarshalIndent(summary, "", "  ")
 		if err == nil {
-			/* #nosec G306 */
+			/* #nosec G306 G703 */
 			_ = os.WriteFile(filepath.Clean(*reportJSONFlag), data, 0600)
 			fmt.Printf("[DriftDetector] Exported drift report to %s\n", *reportJSONFlag)
 		}
