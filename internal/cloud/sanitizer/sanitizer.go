@@ -1,16 +1,24 @@
 package sanitizer
 
 import (
-	"regexp"
 	"strings"
 )
 
-var (
-	azureSanitizeRegex   = regexp.MustCompile(`[^a-z0-9]`)
-	awsSanitizeRegex     = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
-	gcpSanitizeRegex     = regexp.MustCompile(`[^a-z0-9\-_]`)
-	defaultSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
-)
+func filterASCII(s string, lower bool, allowDot, allowHyphen, allowUnderscore bool) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if lower && c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (!lower && c >= 'A' && c <= 'Z') ||
+			(allowDot && c == '.') || (allowHyphen && c == '-') || (allowUnderscore && c == '_') {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
 
 // SanitizeResourceName applies cloud-specific naming constraints to raw resource names
 func SanitizeResourceName(rawName string, providerType string, resourceType string) string {
@@ -18,8 +26,6 @@ func SanitizeResourceName(rawName string, providerType string, resourceType stri
 	if name == "" {
 		return "multicloud-resource"
 	}
-
-	p := strings.ToLower(providerType)
 
 	// Hardened Path Traversal Protection: Recursively strip parent directory references and path separators
 	for strings.Contains(name, "..") || strings.ContainsAny(name, "/\\") {
@@ -35,51 +41,43 @@ func SanitizeResourceName(rawName string, providerType string, resourceType stri
 		return "multicloud-resource"
 	}
 
-	switch p {
-	case "azure":
+	isStorage := strings.Contains(resourceType, "storage")
+	switch {
+	case strings.EqualFold(providerType, "azure") && isStorage:
 		// Azure Storage Account: 3-24 chars, lowercase alphanumeric only
-		if strings.Contains(resourceType, "storage") {
-			name = strings.ToLower(name)
-			name = azureSanitizeRegex.ReplaceAllString(name, "")
-			if len(name) > 24 {
-				name = name[:24]
-			}
-			if len(name) < 3 {
-				name = name + "stg"
-			}
-			return name
+		name = filterASCII(name, true, false, false, false)
+		if len(name) > 24 {
+			name = name[:24]
 		}
+		if len(name) < 3 {
+			name = name + "stg"
+		}
+		return name
 
-	case "aws":
+	case strings.EqualFold(providerType, "aws") && isStorage:
 		// AWS S3 Bucket: 3-63 chars, lowercase alphanumeric, dots, hyphens
-		if strings.Contains(resourceType, "storage") {
-			name = strings.ToLower(name)
-			name = awsSanitizeRegex.ReplaceAllString(name, "")
-			if len(name) > 63 {
-				name = name[:63]
-			}
-			if len(name) < 3 {
-				name = name + "-s3"
-			}
-			return name
+		name = filterASCII(name, true, true, true, true)
+		if len(name) > 63 {
+			name = name[:63]
 		}
+		if len(name) < 3 {
+			name = name + "-s3"
+		}
+		return name
 
-	case "gcp":
+	case strings.EqualFold(providerType, "gcp") && isStorage:
 		// GCP GCS Bucket: 3-63 chars, lowercase alphanumeric, underscores, hyphens
-		if strings.Contains(resourceType, "storage") {
-			name = strings.ToLower(name)
-			name = gcpSanitizeRegex.ReplaceAllString(name, "")
-			if len(name) > 63 {
-				name = name[:63]
-			}
-			if len(name) < 3 {
-				name = name + "-gcs"
-			}
-			return name
+		name = filterASCII(name, true, false, true, true)
+		if len(name) > 63 {
+			name = name[:63]
 		}
+		if len(name) < 3 {
+			name = name + "-gcs"
+		}
+		return name
 	}
 
-	name = defaultSanitizeRegex.ReplaceAllString(name, "")
+	name = filterASCII(name, false, true, true, true)
 	name = strings.Trim(name, ".-_")
 	if name == "" {
 		return "multicloud-resource"
@@ -91,16 +89,33 @@ func SanitizeResourceName(rawName string, providerType string, resourceType stri
 	return name
 }
 
-var identifierSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
+func isCleanIdentifier(s string) bool {
+	if len(s) == 0 || len(s) > 128 {
+		return false
+	}
+	if s[0] == '-' || s[0] == '_' || s[len(s)-1] == '-' || s[len(s)-1] == '_' {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
 
 // SanitizeCloudIdentifier restricts regions, project IDs, subscription IDs, and resource groups
 // to safe alphanumeric, hyphen, and underscore characters to prevent URL host/authority injection.
 func SanitizeCloudIdentifier(raw string, fallback string) string {
 	cleaned := strings.TrimSpace(raw)
+	if isCleanIdentifier(cleaned) {
+		return cleaned
+	}
 	for strings.Contains(cleaned, "..") {
 		cleaned = strings.ReplaceAll(cleaned, "..", "")
 	}
-	cleaned = identifierSanitizeRegex.ReplaceAllString(cleaned, "")
+	cleaned = filterASCII(cleaned, false, false, true, true)
 	cleaned = strings.Trim(cleaned, "-_")
 	if cleaned == "" {
 		return fallback
@@ -114,6 +129,16 @@ func SanitizeCloudIdentifier(raw string, fallback string) string {
 // StripControlChars removes ASCII control characters and ANSI escape sequences from untrusted strings
 // before rendering them in CLI or TUI output.
 func StripControlChars(s string) string {
+	hasControl := false
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] == 0x7f {
+			hasControl = true
+			break
+		}
+	}
+	if !hasControl {
+		return s
+	}
 	return strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f {
 			return -1
@@ -121,3 +146,4 @@ func StripControlChars(s string) string {
 		return r
 	}, s)
 }
+
