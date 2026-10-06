@@ -91,7 +91,11 @@ func (r *AppConfigResource) Create(ctx context.Context, req resource.CreateReque
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "app_config", plan.ConfigName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	extraAttrs := make(map[string]interface{})
+	if !plan.ConfigValue.IsNull() && !plan.ConfigValue.IsUnknown() && plan.ConfigValue.ValueString() != "" {
+		extraAttrs["config_value"] = plan.ConfigValue.ValueString()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "app_config", plan.ConfigName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -156,7 +160,11 @@ func (r *AppConfigResource) Update(ctx context.Context, req resource.UpdateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "app_config", plan.ConfigName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := make(map[string]interface{})
+	if !plan.ConfigValue.IsNull() && !plan.ConfigValue.IsUnknown() && plan.ConfigValue.ValueString() != "" {
+		extraAttrs["config_value"] = plan.ConfigValue.ValueString()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "app_config", plan.ConfigName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
