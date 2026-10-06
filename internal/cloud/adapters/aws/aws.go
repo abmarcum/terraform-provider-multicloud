@@ -25,34 +25,51 @@ import (
 
 type AWSAdapter struct{}
 
-var awsConfigCache sync.Map
+var (
+	awsConfigCache sync.Map
+	awsSigner      = v4.NewSigner()
+)
 
 func loadAWSConfig(ctx context.Context, region string, attrs map[string]interface{}) (aws.Config, error) {
+	var ak, sk, profile string
 	if attrs != nil {
-		ak, _ := attrs["aws_access_key"].(string)
-		sk, _ := attrs["aws_secret_key"].(string)
-		profile, _ := attrs["aws_profile"].(string)
-		if ak != "" && sk != "" {
-			return config.LoadDefaultConfig(ctx,
-				config.WithRegion(region),
-				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(ak, sk, "")),
-			)
-		}
-		if profile != "" {
-			return config.LoadDefaultConfig(ctx,
-				config.WithRegion(region),
-				config.WithSharedConfigProfile(profile),
-			)
-		}
+		ak, _ = attrs["aws_access_key"].(string)
+		sk, _ = attrs["aws_secret_key"].(string)
+		profile, _ = attrs["aws_profile"].(string)
 	}
 
-	if cached, ok := awsConfigCache.Load(region); ok {
+	cacheKey := region
+	if ak != "" && sk != "" {
+		skSum := sha256.Sum256([]byte(sk))
+		cacheKey = region + ":ak:" + ak + ":" + hex.EncodeToString(skSum[:8])
+	} else if profile != "" {
+		cacheKey = region + ":prof:" + profile
+	}
+
+	if cached, ok := awsConfigCache.Load(cacheKey); ok {
 		return cached.(aws.Config), nil
 	}
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	var (
+		cfg aws.Config
+		err error
+	)
+	if ak != "" && sk != "" {
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(region),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(ak, sk, "")),
+		)
+	} else if profile != "" {
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(region),
+			config.WithSharedConfigProfile(profile),
+		)
+	} else {
+		cfg, err = config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	}
+
 	if err == nil {
-		awsConfigCache.Store(region, cfg)
+		awsConfigCache.Store(cacheKey, cfg)
 	}
 	return cfg, err
 }
@@ -156,8 +173,7 @@ func signAWSRequest(ctx context.Context, cfg aws.Config, httpReq *http.Request, 
 	}
 	sum := sha256.Sum256(payload)
 	payloadHash := hex.EncodeToString(sum[:])
-	signer := v4.NewSigner()
-	_ = signer.SignHTTP(ctx, creds, httpReq, payloadHash, awsServiceNameForResource(resType), region, time.Now())
+	_ = awsSigner.SignHTTP(ctx, creds, httpReq, payloadHash, awsServiceNameForResource(resType), region, time.Now())
 }
 
 func getAWSAccountID() string {
