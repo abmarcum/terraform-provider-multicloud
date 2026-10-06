@@ -42,11 +42,11 @@ go test -bench=. ./internal/cloud/...
 
 ## 3. Developer CLI Utilities
 
-### 3.1 API Sync Inspector (`tools/cmd/api-sync`)
-Before adding new resources, run the AST API inspector to check for upstream AWS, GCP, and Azure SDK changes:
+### 3.1 Terraform State Drift Detector (`tools/cmd/drift-detector`)
+Scan Terraform state files (`.tfstate`) against live or mock cloud APIs to detect out-of-band drift:
 
 ```bash
-go run ./tools/cmd/api-sync --dry-run
+go run ./tools/cmd/drift-detector --state terraform.tfstate
 ```
 
 ### 3.2 Resource Code Generator (`tools/cmd/gen-resources`)
@@ -76,5 +76,5 @@ go run ./tools/cmd/tui
 
 1. **Test Coverage:** Ensure new resources or functions include unit tests (`*_test.go`).
 2. **Sensitive Attributes:** Mark secrets, passwords, and tokens as `Sensitive: true` in resource schemas.
-3. **Naming Sanitization:** Pass resource names through `cloud.SanitizeResourceName()`.
+3. **Naming Sanitization:** Pass resource names through `sanitizer.SanitizeResourceName()`.
 4. **Documentation:** Update `docs/RESOURCES_REFERENCE.md` and run `go run ./tools/cmd/gen-docs`.
