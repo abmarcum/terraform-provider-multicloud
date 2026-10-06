@@ -50,5 +50,20 @@ func TestCloudAdapters(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected CreateCloudResource to reject attribute containing leaked AWS secret access key")
 	}
+
+	// 4. Test Sensitive Credential Stripping & Region Sanitization
+	safeResp, err := CreateCloudResource(ctx, "aws", "storage_bucket", "my-bucket", "us-west-2@evil.com", map[string]interface{}{
+		"aws_secret_key": "should-not-echo-in-response",
+		"custom_tag":     "allowed",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error in CreateCloudResource: %v", err)
+	}
+	if _, leaked := safeResp.Attributes["aws_secret_key"]; leaked {
+		t.Errorf("expected aws_secret_key to be stripped from ResourceResponse.Attributes")
+	}
+	if safeResp.Attributes["region"] != "us-west-2evilcom" {
+		t.Errorf("expected region authority characters to be sanitized, got %v", safeResp.Attributes["region"])
+	}
 }
 
