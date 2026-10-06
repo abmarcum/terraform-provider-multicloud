@@ -81,6 +81,14 @@ deny[msg] {
 		t.Errorf("expected OPA_POLICY_PATH evaluation to fail on unencrypted bucket")
 	}
 
+	// Second call hits both the mtime policy file cache and compiled Rego AST cache
+	res = EvaluateOPARegoPolicyWithAttrs("aws", "multicloud_storage_bucket", "test-bkt", "custom_rule", map[string]interface{}{
+		"encryption_enabled": true,
+	})
+	if !res.Passed {
+		t.Errorf("expected OPA_POLICY_PATH evaluation to pass on encrypted bucket, got: %s", res.Violation)
+	}
+
 	t.Setenv("OPA_POLICY_PATH", filepath.Join(tmpDir, "nonexistent.rego"))
 	res = EvaluateOPARegoPolicyWithAttrs("aws", "multicloud_storage_bucket", "test-bkt", "custom_rule", map[string]interface{}{
 		"encryption_enabled": true,
