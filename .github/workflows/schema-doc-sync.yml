@@ -2,7 +2,6 @@ name: Schema & Registry Documentation Sync Check
 
 on:
   pull_request:
-    branches: [ main ]
 
 permissions:
   contents: read
@@ -19,6 +18,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.26'
+          cache: true
 
       - name: Regenerate Documentation
         run: go run ./tools/cmd/gen-docs
