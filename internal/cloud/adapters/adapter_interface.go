@@ -24,7 +24,10 @@ type GCPAdapter = gcp.GCPAdapter
 type AzureAdapter = azure.AzureAdapter
 type ClientConfigProvider = common.ClientConfigProvider
 
-var ErrNotFound = common.ErrNotFound
+var (
+	ErrNotFound              = common.ErrNotFound
+	IsSensitiveOrInternalKey = common.IsSensitiveOrInternalKey
+)
 
 type CloudAdapter interface {
 	CreateResource(ctx context.Context, req ResourceRequest) (ResourceResponse, error)
@@ -40,12 +43,12 @@ var (
 )
 
 func GetAdapter(provider string) (CloudAdapter, error) {
-	switch strings.ToLower(provider) {
-	case "aws":
+	switch {
+	case strings.EqualFold(provider, "aws"):
 		return awsAdapterInstance, nil
-	case "gcp":
+	case strings.EqualFold(provider, "gcp"):
 		return gcpAdapterInstance, nil
-	case "azure":
+	case strings.EqualFold(provider, "azure"):
 		return azureAdapterInstance, nil
 	default:
 		return nil, fmt.Errorf("unsupported cloud provider: %s", provider)
@@ -66,7 +69,7 @@ func validatePreApplySecurity(provider, resType, cleanName string, extraAttrs ma
 	}
 
 	for k, v := range extraAttrs {
-		if k == "aws_secret_key" || k == "gcp_credentials" || k == "azure_client_secret" || k == "azure_bearer_token" {
+		if common.IsSensitiveOrInternalKey(k) {
 			continue
 		}
 		if strVal, ok := v.(string); ok && strVal != "" {
