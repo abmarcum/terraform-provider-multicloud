@@ -5,12 +5,25 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
+
+func isSafeOTLPEndpoint(rawURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "169.254.169.254" || host == "fd00:ec2::254" || host == "metadata.google.internal" || strings.HasPrefix(host, "169.254.") {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && (host == "127.0.0.1" || host == "localhost" || host == "::1"))
+}
 
 // TelemetryEvent models structured OpenTelemetry and audit logging events
 type TelemetryEvent struct {
@@ -26,6 +39,9 @@ const maxBufferedEvents = 512
 
 var otlpHTTPClient = func() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 32
+	transport.MaxIdleConnsPerHost = 16
+	transport.IdleConnTimeout = 90 * time.Second
 	transport.TLSClientConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
@@ -38,16 +54,18 @@ var otlpHTTPClient = func() *http.Client {
 // DefaultExporter is the shared telemetry exporter used across cloud adapter lifecycles
 var DefaultExporter = NewTelemetryExporter()
 
-// TelemetryExporter outputs structured OpenTelemetry JSON logs and buffers events for inspection
+// TelemetryExporter outputs structured OpenTelemetry JSON logs and buffers events in a circular ring buffer
 type TelemetryExporter struct {
 	mu     sync.RWMutex
 	events []TelemetryEvent
+	head   int
+	count  int
 }
 
 // NewTelemetryExporter returns a new TelemetryExporter instance
 func NewTelemetryExporter() *TelemetryExporter {
 	return &TelemetryExporter{
-		events: make([]TelemetryEvent, 0, 64),
+		events: make([]TelemetryEvent, maxBufferedEvents),
 	}
 }
 
@@ -68,14 +86,17 @@ func (t *TelemetryExporter) RecordEvent(eventType string, provider string, resou
 	}
 
 	t.mu.Lock()
-	if len(t.events) >= maxBufferedEvents {
-		t.events = append(t.events[1:], event)
+	if t.count < maxBufferedEvents {
+		idx := (t.head + t.count) % maxBufferedEvents
+		t.events[idx] = event
+		t.count++
 	} else {
-		t.events = append(t.events, event)
+		t.events[t.head] = event
+		t.head = (t.head + 1) % maxBufferedEvents
 	}
 	t.mu.Unlock()
 
-	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" {
+	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" && isSafeOTLPEndpoint(endpoint) {
 		/* #nosec G107 G704 */
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint, bytes.NewReader(payload))
 		if err == nil {
@@ -87,15 +108,16 @@ func (t *TelemetryExporter) RecordEvent(eventType string, provider string, resou
 		}
 	}
 
-	out := fmt.Sprintf("[TelemetryExporter] %s", string(payload))
-	return out, nil
+	return "[TelemetryExporter] " + string(payload), nil
 }
 
-// Events returns a snapshot of recorded telemetry events
+// Events returns a chronological snapshot of recorded telemetry events
 func (t *TelemetryExporter) Events() []TelemetryEvent {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	copied := make([]TelemetryEvent, len(t.events))
-	copy(copied, t.events)
+	copied := make([]TelemetryEvent, t.count)
+	for i := 0; i < t.count; i++ {
+		copied[i] = t.events[(t.head+i)%maxBufferedEvents]
+	}
 	return copied
 }

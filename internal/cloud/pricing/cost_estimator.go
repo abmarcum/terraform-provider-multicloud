@@ -55,6 +55,9 @@ type GCPCatalogResponse struct {
 
 var liveHTTPClient = func() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 32
+	transport.MaxIdleConnsPerHost = 16
+	transport.IdleConnTimeout = 90 * time.Second
 	transport.TLSClientConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
@@ -71,7 +74,38 @@ type cachedPrice struct {
 
 var (
 	priceCacheMu sync.RWMutex
-	priceCache   = make(map[string]cachedPrice)
+	priceCache   = make(map[string]cachedPrice, 64)
+
+	awsHourlyRates = map[string]float64{
+		"t3.nano":     0.0052,
+		"t3.micro":    0.0208,
+		"t3.small":    0.0208,
+		"t3.medium":   0.0416,
+		"t3.large":    0.0832,
+		"t3.xlarge":   0.1664,
+		"t4g.small":   0.0168,
+		"t4g.medium":  0.0336,
+		"t4g.large":   0.0672,
+		"m6i.large":   0.0960,
+		"m6i.xlarge":  0.1920,
+		"m6i.2xlarge": 0.3840,
+		"c6i.large":   0.0850,
+		"r6i.large":   0.1260,
+	}
+
+	gcpHourlyRates = map[string]float64{
+		"e2-micro":       0.0198,
+		"e2-small":       0.0198,
+		"e2-medium":      0.0408,
+		"e2-standard-2":  0.0816,
+		"e2-standard-4":  0.1632,
+		"n2-standard-2":  0.0971,
+		"n2-standard-4":  0.1942,
+		"n2-standard-8":  0.3884,
+		"t2a-standard-1": 0.0385,
+		"t2a-standard-2": 0.0770,
+		"t2a-standard-4": 0.1540,
+	}
 )
 
 func getCachedPrice(key string) (float64, bool) {
@@ -137,6 +171,18 @@ func FetchLiveAzurePriceWithContext(ctx context.Context, skuName string) (float6
 	return 0, fmt.Errorf("no pricing found for SKU %s", skuName)
 }
 
+func isSafePricingOfferURL(rawURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "169.254.169.254" || host == "fd00:ec2::254" || host == "metadata.google.internal" || strings.HasPrefix(host, "169.254.") {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && (host == "127.0.0.1" || host == "localhost" || host == "::1"))
+}
+
 // FetchLiveAWSPrice fetches pricing rate for AWS EC2 instance types, querying AWS Price List endpoint when configured
 func FetchLiveAWSPrice(instanceType string) (float64, error) {
 	cacheKey := "aws:" + instanceType
@@ -144,7 +190,7 @@ func FetchLiveAWSPrice(instanceType string) (float64, error) {
 		return cached, nil
 	}
 
-	if offerURL := os.Getenv("AWS_PRICING_OFFER_URL"); offerURL != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" {
+	if offerURL := os.Getenv("AWS_PRICING_OFFER_URL"); offerURL != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" && isSafePricingOfferURL(offerURL) {
 		/* #nosec G107 G704 */
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, offerURL, nil)
 		if err == nil {
@@ -174,23 +220,7 @@ func FetchLiveAWSPrice(instanceType string) (float64, error) {
 		}
 	}
 
-	hourlyRates := map[string]float64{
-		"t3.nano":     0.0052,
-		"t3.micro":    0.0208,
-		"t3.small":    0.0208,
-		"t3.medium":   0.0416,
-		"t3.large":    0.0832,
-		"t3.xlarge":   0.1664,
-		"t4g.small":   0.0168,
-		"t4g.medium":  0.0336,
-		"t4g.large":   0.0672,
-		"m6i.large":   0.0960,
-		"m6i.xlarge":  0.1920,
-		"m6i.2xlarge": 0.3840,
-		"c6i.large":   0.0850,
-		"r6i.large":   0.1260,
-	}
-	if hourly, ok := hourlyRates[strings.ToLower(instanceType)]; ok {
+	if hourly, ok := awsHourlyRates[strings.ToLower(instanceType)]; ok {
 		monthly := hourly * 730.0
 		setCachedPrice(cacheKey, monthly)
 		return monthly, nil
@@ -237,20 +267,7 @@ func FetchLiveGCPPrice(machineType string) (float64, error) {
 		}
 	}
 
-	hourlyRates := map[string]float64{
-		"e2-micro":       0.0198,
-		"e2-small":       0.0198,
-		"e2-medium":      0.0408,
-		"e2-standard-2":  0.0816,
-		"e2-standard-4":  0.1632,
-		"n2-standard-2":  0.0971,
-		"n2-standard-4":  0.1942,
-		"n2-standard-8":  0.3884,
-		"t2a-standard-1": 0.0385,
-		"t2a-standard-2": 0.0770,
-		"t2a-standard-4": 0.1540,
-	}
-	if hourly, ok := hourlyRates[strings.ToLower(machineType)]; ok {
+	if hourly, ok := gcpHourlyRates[strings.ToLower(machineType)]; ok {
 		monthly := hourly * 730.0
 		setCachedPrice(cacheKey, monthly)
 		return monthly, nil

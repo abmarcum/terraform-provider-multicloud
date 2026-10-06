@@ -140,6 +140,12 @@ func (r *VirtualMachineResource) Create(ctx context.Context, req resource.Create
 		extraAttrs["gcp_machine_type"] = instType
 		extraAttrs["azure_vm_sku"] = instType
 	}
+	if !plan.UserData.IsNull() && !plan.UserData.IsUnknown() && plan.UserData.ValueString() != "" {
+		extraAttrs["user_data"] = plan.UserData.ValueString()
+	}
+	if !plan.AssociatePublicIP.IsNull() && !plan.AssociatePublicIP.IsUnknown() {
+		extraAttrs["associate_public_ip"] = plan.AssociatePublicIP.ValueBool()
+	}
 
 	res, err := adapters.CreateCloudResource(ctx, providerType, "virtual_machine", plan.VMName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
@@ -223,7 +229,14 @@ func (r *VirtualMachineResource) Update(ctx context.Context, req resource.Update
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "virtual_machine", plan.VMName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := make(map[string]interface{})
+	if !plan.UserData.IsNull() && !plan.UserData.IsUnknown() && plan.UserData.ValueString() != "" {
+		extraAttrs["user_data"] = plan.UserData.ValueString()
+	}
+	if !plan.AssociatePublicIP.IsNull() && !plan.AssociatePublicIP.IsUnknown() {
+		extraAttrs["associate_public_ip"] = plan.AssociatePublicIP.ValueBool()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "virtual_machine", plan.VMName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

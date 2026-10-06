@@ -114,7 +114,14 @@ func (r *StorageBucketResource) Create(ctx context.Context, req resource.CreateR
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "storage_bucket", plan.BucketName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	extraAttrs := make(map[string]interface{})
+	if !plan.EncryptionEnabled.IsNull() && !plan.EncryptionEnabled.IsUnknown() {
+		extraAttrs["encryption_enabled"] = plan.EncryptionEnabled.ValueBool()
+	}
+	if !plan.PublicAccessBlock.IsNull() && !plan.PublicAccessBlock.IsUnknown() {
+		extraAttrs["is_public"] = !plan.PublicAccessBlock.ValueBool()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "storage_bucket", plan.BucketName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -165,7 +172,14 @@ func (r *StorageBucketResource) Update(ctx context.Context, req resource.UpdateR
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "storage_bucket", plan.BucketName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := make(map[string]interface{})
+	if !plan.EncryptionEnabled.IsNull() && !plan.EncryptionEnabled.IsUnknown() {
+		extraAttrs["encryption_enabled"] = plan.EncryptionEnabled.ValueBool()
+	}
+	if !plan.PublicAccessBlock.IsNull() && !plan.PublicAccessBlock.IsUnknown() {
+		extraAttrs["is_public"] = !plan.PublicAccessBlock.ValueBool()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "storage_bucket", plan.BucketName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

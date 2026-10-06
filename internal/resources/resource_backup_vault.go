@@ -139,7 +139,11 @@ func (r *BackupVaultResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "backup_vault", plan.VaultName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := make(map[string]interface{})
+	if !plan.EncryptionEnabled.IsNull() && !plan.EncryptionEnabled.IsUnknown() {
+		extraAttrs["encryption_enabled"] = plan.EncryptionEnabled.ValueBool()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "backup_vault", plan.VaultName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

@@ -25,34 +25,51 @@ import (
 
 type AWSAdapter struct{}
 
-var awsConfigCache sync.Map
+var (
+	awsConfigCache sync.Map
+	awsSigner      = v4.NewSigner()
+)
 
 func loadAWSConfig(ctx context.Context, region string, attrs map[string]interface{}) (aws.Config, error) {
+	var ak, sk, profile string
 	if attrs != nil {
-		ak, _ := attrs["aws_access_key"].(string)
-		sk, _ := attrs["aws_secret_key"].(string)
-		profile, _ := attrs["aws_profile"].(string)
-		if ak != "" && sk != "" {
-			return config.LoadDefaultConfig(ctx,
-				config.WithRegion(region),
-				config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(ak, sk, "")),
-			)
-		}
-		if profile != "" {
-			return config.LoadDefaultConfig(ctx,
-				config.WithRegion(region),
-				config.WithSharedConfigProfile(profile),
-			)
-		}
+		ak, _ = attrs["aws_access_key"].(string)
+		sk, _ = attrs["aws_secret_key"].(string)
+		profile, _ = attrs["aws_profile"].(string)
 	}
 
-	if cached, ok := awsConfigCache.Load(region); ok {
+	cacheKey := region
+	if ak != "" && sk != "" {
+		skSum := sha256.Sum256([]byte(sk))
+		cacheKey = region + ":ak:" + ak + ":" + hex.EncodeToString(skSum[:8])
+	} else if profile != "" {
+		cacheKey = region + ":prof:" + profile
+	}
+
+	if cached, ok := awsConfigCache.Load(cacheKey); ok {
 		return cached.(aws.Config), nil
 	}
 
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	var (
+		cfg aws.Config
+		err error
+	)
+	if ak != "" && sk != "" {
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(region),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(ak, sk, "")),
+		)
+	} else if profile != "" {
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(region),
+			config.WithSharedConfigProfile(profile),
+		)
+	} else {
+		cfg, err = config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	}
+
 	if err == nil {
-		awsConfigCache.Store(region, cfg)
+		awsConfigCache.Store(cacheKey, cfg)
 	}
 	return cfg, err
 }
@@ -156,16 +173,12 @@ func signAWSRequest(ctx context.Context, cfg aws.Config, httpReq *http.Request, 
 	}
 	sum := sha256.Sum256(payload)
 	payloadHash := hex.EncodeToString(sum[:])
-	signer := v4.NewSigner()
-	_ = signer.SignHTTP(ctx, creds, httpReq, payloadHash, awsServiceNameForResource(resType), region, time.Now())
+	_ = awsSigner.SignHTTP(ctx, creds, httpReq, payloadHash, awsServiceNameForResource(resType), region, time.Now())
 }
 
 func getAWSAccountID() string {
 	acc := os.Getenv("AWS_ACCOUNT_ID")
-	if acc == "" {
-		acc = "unknown-account"
-	}
-	return url.PathEscape(acc)
+	return url.PathEscape(common.GetRegion(acc, "unknown-account"))
 }
 
 func getAWSIntelInstanceType(sizeTier string, extraAttrs map[string]interface{}) string {
@@ -204,7 +217,7 @@ func getAWSServiceEndpoint(region string, resType string, name string) (string, 
 
 	escName := url.PathEscape(name)
 	escQueryName := url.QueryEscape(name)
-	escRegion := url.PathEscape(region)
+	escRegion := url.PathEscape(common.GetRegion(region, "us-east-1"))
 	accID := getAWSAccountID()
 
 	switch resType {
@@ -354,7 +367,7 @@ func getAWSDeleteEndpoint(region string, resType string, name string) (string, s
 
 	escName := url.PathEscape(name)
 	escQueryName := url.QueryEscape(name)
-	escRegion := url.PathEscape(region)
+	escRegion := common.GetRegion(region, "us-east-1")
 	accID := getAWSAccountID()
 
 	switch resType {
@@ -400,7 +413,7 @@ func getAWSDeleteEndpoint(region string, resType string, name string) (string, s
 func getAWSReadEndpoint(region string, resType string, name string) (string, string) {
 	escName := url.PathEscape(name)
 	escQueryName := url.QueryEscape(name)
-	escRegion := url.PathEscape(region)
+	escRegion := common.GetRegion(region, "us-east-1")
 
 	switch resType {
 	case "storage_bucket", "storage_inventory_report":
@@ -437,6 +450,9 @@ func buildMockAttributes(provider, region string, req common.ResourceRequest) ma
 		"dns_name":       fmt.Sprintf("%s.anycast.%s.net", req.ResourceName, provider),
 	}
 	for k, v := range req.Attributes {
+		if common.IsSensitiveOrInternalKey(k) {
+			continue
+		}
 		attrs[k] = v
 	}
 	return attrs

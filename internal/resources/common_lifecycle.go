@@ -10,21 +10,21 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// isReservedExtraConfigKey blocks untrusted extra_config entries from overriding provider credentials or mock_mode.
+func isReservedExtraConfigKey(k string) bool {
+	return adapters.IsSensitiveOrInternalKey(k)
+}
+
 // buildResourceExtraAttrs merges provider-level default attributes from ClientManager,
 // resource-level extra_config map entries, and any resource-specific attributes.
 func buildResourceExtraAttrs(clientManager interface{}, providerType string, extraConfig types.Map, custom map[string]interface{}) map[string]interface{} {
 	attrs := make(map[string]interface{})
-	if clientManager != nil {
-		attrs["_client_manager"] = clientManager
-		if cm, ok := clientManager.(adapters.ClientConfigProvider); ok {
-			for k, v := range cm.DefaultAttrs(providerType) {
-				attrs[k] = v
-			}
-		}
-	}
 
 	if !extraConfig.IsNull() && !extraConfig.IsUnknown() {
 		for k, v := range extraConfig.Elements() {
+			if isReservedExtraConfigKey(k) {
+				continue
+			}
 			if strVal, ok := v.(types.String); ok && !strVal.IsNull() && !strVal.IsUnknown() {
 				attrs[k] = strVal.ValueString()
 			}
@@ -33,6 +33,15 @@ func buildResourceExtraAttrs(clientManager interface{}, providerType string, ext
 
 	for k, v := range custom {
 		attrs[k] = v
+	}
+
+	if clientManager != nil {
+		attrs["_client_manager"] = clientManager
+		if cm, ok := clientManager.(adapters.ClientConfigProvider); ok {
+			for k, v := range cm.DefaultAttrs(providerType) {
+				attrs[k] = v
+			}
+		}
 	}
 
 	return attrs
@@ -54,15 +63,8 @@ func resolveProviderAndRegion(providerAttr, regionAttr types.String, clientManag
 	if reg == "" && clientManager != nil {
 		if cm, ok := clientManager.(adapters.ClientConfigProvider); ok {
 			defaults := cm.DefaultAttrs(pType)
-			switch pType {
-			case "aws":
-				if r, ok := defaults["aws_region"].(string); ok && r != "" {
-					reg = r
-				}
-			case "gcp":
-				if r, ok := defaults["gcp_region"].(string); ok && r != "" {
-					reg = r
-				}
+			if r, ok := defaults["provider_default_region"].(string); ok && r != "" {
+				reg = r
 			}
 		}
 	}

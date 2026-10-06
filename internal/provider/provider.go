@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"os"
 
 	"github.com/abmarcum/multi-cloud-provider/internal/resources"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -83,14 +82,6 @@ func (p *MulticloudProvider) Configure(ctx context.Context, req provider.Configu
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
-	}
-
-	if !data.MockMode.IsNull() && !data.MockMode.IsUnknown() {
-		if data.MockMode.ValueBool() {
-			_ = os.Setenv("MULTICLOUD_MOCK_MODE", "true")
-		} else {
-			_ = os.Setenv("MULTICLOUD_MOCK_MODE", "false")
-		}
 	}
 
 	clientManager, err := NewClientManager(ctx, data)

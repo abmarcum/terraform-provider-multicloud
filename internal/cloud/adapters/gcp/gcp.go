@@ -3,6 +3,7 @@ package gcp
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,22 +25,53 @@ var (
 	defaultTokenSourceOnce sync.Once
 	defaultTokenSource     oauth2.TokenSource
 	defaultTokenSourceErr  error
+	gcpTokenSourceCache    sync.Map // map[[32]byte]oauth2.TokenSource
 )
+
+func validateGCPServiceAccountJSON(raw []byte) error {
+	var meta struct {
+		TokenURI string `json:"token_uri"`
+	}
+	if err := json.Unmarshal(raw, &meta); err == nil && meta.TokenURI != "" {
+		if meta.TokenURI != "https://oauth2.googleapis.com/token" &&
+			meta.TokenURI != "https://accounts.google.com/o/oauth2/token" &&
+			!strings.HasPrefix(meta.TokenURI, "http://127.0.0.1:") &&
+			!strings.HasPrefix(meta.TokenURI, "http://localhost:") {
+			return fmt.Errorf("untrusted GCP OAuth2 token_uri: %s", meta.TokenURI)
+		}
+	}
+	return nil
+}
 
 func getGCPAccessToken(ctx context.Context, req common.ResourceRequest) (string, error) {
 	if req.Attributes != nil {
 		if credJSON, ok := req.Attributes["gcp_credentials"].(string); ok && strings.TrimSpace(credJSON) != "" {
 			raw := []byte(credJSON)
 			if !strings.HasPrefix(strings.TrimSpace(credJSON), "{") {
-				/* #nosec G304 */
+				if strings.Contains(credJSON, "..") || !strings.HasSuffix(strings.ToLower(strings.TrimSpace(credJSON)), ".json") {
+					return "", fmt.Errorf("invalid GCP credentials file path: must be a .json file without path traversal")
+				}
+				/* #nosec G304 G703 */
 				if fileBytes, err := os.ReadFile(filepath.Clean(credJSON)); err == nil {
 					raw = fileBytes
 				}
+			}
+			cacheKey := sha256.Sum256(raw)
+			if cachedTS, ok := gcpTokenSourceCache.Load(cacheKey); ok {
+				tok, err := cachedTS.(oauth2.TokenSource).Token()
+				if err != nil {
+					return "", fmt.Errorf("GCP OAuth2 token exchange failed: %w", err)
+				}
+				return tok.AccessToken, nil
+			}
+			if err := validateGCPServiceAccountJSON(raw); err != nil {
+				return "", err
 			}
 			creds, err := google.CredentialsFromJSON(ctx, raw, "https://www.googleapis.com/auth/cloud-platform")
 			if err != nil {
 				return "", fmt.Errorf("GCP credentials parse error: %w", err)
 			}
+			gcpTokenSourceCache.Store(cacheKey, creds.TokenSource)
 			tok, err := creds.TokenSource.Token()
 			if err != nil {
 				return "", fmt.Errorf("GCP OAuth2 token exchange failed: %w", err)
@@ -84,9 +116,11 @@ func getGCPServiceEndpoint(project string, region string, resType string, name s
 	var endpoint string
 	var payload []byte
 
-	escProject := url.PathEscape(project)
-	escQueryProject := url.QueryEscape(project)
-	escRegion := url.PathEscape(region)
+	cleanProj := common.GetRegion(project, "default-gcp-project")
+	cleanReg := common.GetRegion(region, "us-central1")
+	escProject := url.PathEscape(cleanProj)
+	escQueryProject := url.QueryEscape(cleanProj)
+	escRegion := url.PathEscape(cleanReg)
 	escName := url.PathEscape(name)
 	escQueryName := url.QueryEscape(name)
 
@@ -306,6 +340,9 @@ func buildGCPMockAttributes(region string, req common.ResourceRequest) map[strin
 		"dns_name":       fmt.Sprintf("%s.anycast.gcp.net", req.ResourceName),
 	}
 	for k, v := range req.Attributes {
+		if common.IsSensitiveOrInternalKey(k) {
+			continue
+		}
 		attrs[k] = v
 	}
 	return attrs

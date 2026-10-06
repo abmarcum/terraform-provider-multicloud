@@ -64,7 +64,7 @@ func main() {
 			continue
 		}
 
-		/* #nosec G304 */
+		/* #nosec G304 G703 */
 		content, err := os.ReadFile(file)
 		if err != nil {
 			continue
@@ -112,7 +112,7 @@ func main() {
 
 					convertedHCL.WriteString("}\n\n")
 
-					stateCommands = append(stateCommands, fmt.Sprintf("terraform state mv %s.%s %s.%s", legacyType, resName, mapping.UnifiedType, resName))
+					stateCommands = append(stateCommands, fmt.Sprintf("terraform state mv '%s.%s' '%s.%s'", legacyType, resName, mapping.UnifiedType, resName))
 				}
 			}
 		}
@@ -156,13 +156,10 @@ func main() {
 }
 
 func isStandardAttr(attr string) bool {
-	standard := map[string]bool{
-		"bucket_name":        true,
-		"region":             true,
-		"versioning_enabled": true,
-		"encryption_enabled": true,
-		"instance_type":      true,
-		"name":               true,
+	switch attr {
+	case "bucket_name", "region", "versioning_enabled", "encryption_enabled", "instance_type", "name":
+		return true
+	default:
+		return false
 	}
-	return standard[attr]
 }

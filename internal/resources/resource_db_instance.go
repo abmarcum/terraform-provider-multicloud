@@ -129,7 +129,14 @@ func (r *DBInstanceResource) Create(ctx context.Context, req resource.CreateRequ
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "db_instance", plan.InstanceName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	extraAttrs := make(map[string]interface{})
+	if !plan.MultiAZ.IsNull() && !plan.MultiAZ.IsUnknown() {
+		extraAttrs["multi_az"] = plan.MultiAZ.ValueBool()
+	}
+	if !plan.KMSKeyID.IsNull() && !plan.KMSKeyID.IsUnknown() && plan.KMSKeyID.ValueString() != "" {
+		extraAttrs["kms_key_id"] = plan.KMSKeyID.ValueString()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "db_instance", plan.InstanceName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -215,7 +222,14 @@ func (r *DBInstanceResource) Update(ctx context.Context, req resource.UpdateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "db_instance", plan.InstanceName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := make(map[string]interface{})
+	if !plan.MultiAZ.IsNull() && !plan.MultiAZ.IsUnknown() {
+		extraAttrs["multi_az"] = plan.MultiAZ.ValueBool()
+	}
+	if !plan.KMSKeyID.IsNull() && !plan.KMSKeyID.IsUnknown() && plan.KMSKeyID.ValueString() != "" {
+		extraAttrs["kms_key_id"] = plan.KMSKeyID.ValueString()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "db_instance", plan.InstanceName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

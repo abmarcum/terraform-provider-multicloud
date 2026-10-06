@@ -35,10 +35,7 @@ func getAzureSubscriptionID(req common.ResourceRequest) string {
 			sub = s
 		}
 	}
-	if sub == "" {
-		sub = "00000000-0000-0000-0000-000000000000"
-	}
-	return url.PathEscape(sub)
+	return url.PathEscape(common.GetRegion(sub, "00000000-0000-0000-0000-000000000000"))
 }
 
 func getAzureResourceGroup(req common.ResourceRequest) string {
@@ -48,10 +45,7 @@ func getAzureResourceGroup(req common.ResourceRequest) string {
 			rg = r
 		}
 	}
-	if rg == "" {
-		rg = "multicloud-rg"
-	}
-	return url.PathEscape(rg)
+	return url.PathEscape(common.GetRegion(rg, "multicloud-rg"))
 }
 
 func getAzureBearerToken(ctx context.Context, req common.ResourceRequest) string {
@@ -303,6 +297,9 @@ func buildAzureMockAttributes(region string, req common.ResourceRequest) map[str
 		"dns_name":       fmt.Sprintf("%s.anycast.azure.net", req.ResourceName),
 	}
 	for k, v := range req.Attributes {
+		if common.IsSensitiveOrInternalKey(k) {
+			continue
+		}
 		attrs[k] = v
 	}
 	return attrs

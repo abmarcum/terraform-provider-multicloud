@@ -91,7 +91,11 @@ func (r *EdgeFunctionResource) Create(ctx context.Context, req resource.CreateRe
 	} else {
 		plan.Region = types.StringNull()
 	}
-	res, err := adapters.CreateCloudResource(ctx, providerType, "edge_function", plan.FunctionName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, nil))
+	extraAttrs := make(map[string]interface{})
+	if !plan.CodeContent.IsNull() && !plan.CodeContent.IsUnknown() && plan.CodeContent.ValueString() != "" {
+		extraAttrs["code_content"] = plan.CodeContent.ValueString()
+	}
+	res, err := adapters.CreateCloudResource(ctx, providerType, "edge_function", plan.FunctionName.ValueString(), reg, buildResourceExtraAttrs(r.clientManager, providerType, plan.ExtraConfig, extraAttrs))
 	if err != nil {
 		resp.Diagnostics.AddError("Cloud Provision Error", err.Error())
 		return
@@ -121,7 +125,11 @@ func (r *EdgeFunctionResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "edge_function", plan.FunctionName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := make(map[string]interface{})
+	if !plan.CodeContent.IsNull() && !plan.CodeContent.IsUnknown() && plan.CodeContent.ValueString() != "" {
+		extraAttrs["code_content"] = plan.CodeContent.ValueString()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "edge_function", plan.FunctionName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
