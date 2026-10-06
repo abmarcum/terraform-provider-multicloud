@@ -29,6 +29,13 @@ func TestTelemetryExporterRecordEventAndBuffer(t *testing.T) {
 	if len(events) != 1 || events[0].Resource != "prod-bucket" {
 		t.Errorf("expected 1 buffered telemetry event for prod-bucket, got %+v", events)
 	}
+
+	for i := 0; i < maxBufferedEvents+10; i++ {
+		_, _ = exporter.RecordEvent("READ", "aws", "ring-res", time.Millisecond, nil)
+	}
+	if got := len(exporter.Events()); got != maxBufferedEvents {
+		t.Errorf("expected ring buffer to cap at %d events, got %d", maxBufferedEvents, got)
+	}
 }
 
 func TestTelemetryExporterOTLPCollectorExport(t *testing.T) {
