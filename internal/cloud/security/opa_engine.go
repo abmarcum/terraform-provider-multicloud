@@ -41,11 +41,19 @@ func EvaluateOPARegoPolicyWithAttrs(providerType string, resourceType string, re
 	}
 	if policyPath := os.Getenv("OPA_POLICY_PATH"); policyPath != "" {
 		/* #nosec G304 G703 */
-		if data, err := os.ReadFile(filepath.Clean(policyPath)); err == nil && len(data) > 0 {
-			res := EvaluateRegoModule(providerType, resourceType, resourceName, string(data), attributes)
-			if !res.Passed {
-				return res
+		data, err := os.ReadFile(filepath.Clean(policyPath))
+		if err != nil || len(strings.TrimSpace(string(data))) == 0 {
+			return OPAPolicyResult{
+				ResourceName: resourceName,
+				ProviderType: providerType,
+				PolicyRule:   "opa_policy_path",
+				Passed:       false,
+				Violation:    fmt.Sprintf("[%s OPA Engine] Failed to load required Rego policy from OPA_POLICY_PATH", p),
 			}
+		}
+		res := EvaluateRegoModule(providerType, resourceType, resourceName, string(data), attributes)
+		if !res.Passed {
+			return res
 		}
 	}
 
