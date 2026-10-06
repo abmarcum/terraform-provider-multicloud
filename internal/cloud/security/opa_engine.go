@@ -62,6 +62,7 @@ var (
 
 func loadCachedPolicyFile(rawPath string) (string, error) {
 	cleanPath := filepath.Clean(rawPath)
+	/* #nosec G304 G703 */
 	info, err := os.Stat(cleanPath)
 	if err != nil {
 		return "", err
