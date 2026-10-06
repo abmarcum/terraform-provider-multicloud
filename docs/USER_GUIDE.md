@@ -127,7 +127,7 @@ Query existing cloud resources or pre-calculate FinOps estimates directly in HCL
 data "multicloud_resource" "shared_bucket" {
   provider_type = "aws"
   resource_type = "storage_bucket"
-  resource_name = "company-shared-assets"
+  name          = "company-shared-assets"
   region        = "us-west-2"
 }
 
