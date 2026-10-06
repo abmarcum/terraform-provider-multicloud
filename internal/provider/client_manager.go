@@ -15,14 +15,14 @@ var _ common.ClientConfigProvider = &ClientManager{}
 
 // ClientManager holds cloud SDK instances with thread-safe lazy initialization
 type ClientManager struct {
-	mu            sync.Mutex
-	model         ProviderModel
-	awsConfig     *aws.Config
-	gcpConfig     *GCPClientConfig
-	azureConfig   *AzureClientConfig
-	awsInitOnce   sync.Once
-	gcpInitOnce   sync.Once
-	azureInitOnce sync.Once
+	model             ProviderModel
+	awsConfig         *aws.Config
+	gcpConfig         *GCPClientConfig
+	azureConfig       *AzureClientConfig
+	awsInitOnce       sync.Once
+	gcpInitOnce       sync.Once
+	azureInitOnce     sync.Once
+	defaultAttrsCache sync.Map
 }
 
 type GCPClientConfig struct {
@@ -55,71 +55,87 @@ func (cm *ClientManager) IsMockMode() bool {
 	return common.IsMockMode()
 }
 
-// DefaultAttrs returns provider-scoped credentials, default regions, and mock mode settings for adapter requests
-func (cm *ClientManager) DefaultAttrs(providerType string) map[string]interface{} {
-	attrs := make(map[string]interface{})
-	if cm.IsMockMode() {
-		attrs["mock_mode"] = true
+func (cm *ClientManager) computeStaticDefaultAttrs(pType string) map[string]interface{} {
+	if cached, ok := cm.defaultAttrsCache.Load(pType); ok {
+		return cached.(map[string]interface{})
 	}
 
+	base := make(map[string]interface{}, 6)
 	if !cm.model.DefaultTags.IsNull() && !cm.model.DefaultTags.IsUnknown() {
-		tagMap := make(map[string]string)
-		for k, v := range cm.model.DefaultTags.Elements() {
-			tagMap[k] = strings.Trim(v.String(), "\"")
-		}
-		if len(tagMap) > 0 {
-			attrs["default_tags"] = tagMap
+		elems := cm.model.DefaultTags.Elements()
+		if len(elems) > 0 {
+			tagMap := make(map[string]string, len(elems))
+			for k, v := range elems {
+				tagMap[k] = strings.Trim(v.String(), "\"")
+			}
+			base["default_tags"] = tagMap
 		}
 	}
 
-	switch strings.ToLower(providerType) {
+	switch pType {
 	case "aws":
 		if cm.model.AWS != nil {
 			if !cm.model.AWS.AccessKey.IsNull() && !cm.model.AWS.AccessKey.IsUnknown() && cm.model.AWS.AccessKey.ValueString() != "" {
-				attrs["aws_access_key"] = cm.model.AWS.AccessKey.ValueString()
+				base["aws_access_key"] = cm.model.AWS.AccessKey.ValueString()
 			}
 			if !cm.model.AWS.SecretKey.IsNull() && !cm.model.AWS.SecretKey.IsUnknown() && cm.model.AWS.SecretKey.ValueString() != "" {
-				attrs["aws_secret_key"] = cm.model.AWS.SecretKey.ValueString()
+				base["aws_secret_key"] = cm.model.AWS.SecretKey.ValueString()
 			}
 			if !cm.model.AWS.Profile.IsNull() && !cm.model.AWS.Profile.IsUnknown() && cm.model.AWS.Profile.ValueString() != "" {
-				attrs["aws_profile"] = cm.model.AWS.Profile.ValueString()
+				base["aws_profile"] = cm.model.AWS.Profile.ValueString()
 			}
 			if !cm.model.AWS.Region.IsNull() && !cm.model.AWS.Region.IsUnknown() && cm.model.AWS.Region.ValueString() != "" {
-				attrs["provider_default_region"] = cm.model.AWS.Region.ValueString()
+				base["provider_default_region"] = cm.model.AWS.Region.ValueString()
 			}
 		}
 	case "gcp":
 		if cm.model.GCP != nil {
 			if !cm.model.GCP.Project.IsNull() && !cm.model.GCP.Project.IsUnknown() && cm.model.GCP.Project.ValueString() != "" {
-				attrs["gcp_project"] = cm.model.GCP.Project.ValueString()
+				base["gcp_project"] = cm.model.GCP.Project.ValueString()
 			}
 			if !cm.model.GCP.Credentials.IsNull() && !cm.model.GCP.Credentials.IsUnknown() && cm.model.GCP.Credentials.ValueString() != "" {
-				attrs["gcp_credentials"] = cm.model.GCP.Credentials.ValueString()
+				base["gcp_credentials"] = cm.model.GCP.Credentials.ValueString()
 			}
 			if !cm.model.GCP.Region.IsNull() && !cm.model.GCP.Region.IsUnknown() && cm.model.GCP.Region.ValueString() != "" {
-				attrs["provider_default_region"] = cm.model.GCP.Region.ValueString()
+				base["provider_default_region"] = cm.model.GCP.Region.ValueString()
 			}
 		}
 	case "azure":
 		if cm.model.Azure != nil {
 			if !cm.model.Azure.SubscriptionID.IsNull() && !cm.model.Azure.SubscriptionID.IsUnknown() && cm.model.Azure.SubscriptionID.ValueString() != "" {
-				attrs["azure_subscription_id"] = cm.model.Azure.SubscriptionID.ValueString()
+				base["azure_subscription_id"] = cm.model.Azure.SubscriptionID.ValueString()
 			}
 			if !cm.model.Azure.ResourceGroup.IsNull() && !cm.model.Azure.ResourceGroup.IsUnknown() && cm.model.Azure.ResourceGroup.ValueString() != "" {
-				attrs["azure_resource_group"] = cm.model.Azure.ResourceGroup.ValueString()
+				base["azure_resource_group"] = cm.model.Azure.ResourceGroup.ValueString()
 			}
 			if !cm.model.Azure.TenantID.IsNull() && !cm.model.Azure.TenantID.IsUnknown() && cm.model.Azure.TenantID.ValueString() != "" {
-				attrs["azure_tenant_id"] = cm.model.Azure.TenantID.ValueString()
+				base["azure_tenant_id"] = cm.model.Azure.TenantID.ValueString()
 			}
 			if !cm.model.Azure.ClientID.IsNull() && !cm.model.Azure.ClientID.IsUnknown() && cm.model.Azure.ClientID.ValueString() != "" {
-				attrs["azure_client_id"] = cm.model.Azure.ClientID.ValueString()
+				base["azure_client_id"] = cm.model.Azure.ClientID.ValueString()
 			}
 			if !cm.model.Azure.ClientSecret.IsNull() && !cm.model.Azure.ClientSecret.IsUnknown() && cm.model.Azure.ClientSecret.ValueString() != "" {
-				attrs["azure_client_secret"] = cm.model.Azure.ClientSecret.ValueString()
+				base["azure_client_secret"] = cm.model.Azure.ClientSecret.ValueString()
 			}
 		}
 	}
 
+	cm.defaultAttrsCache.Store(pType, base)
+	return base
+}
+
+// DefaultAttrs returns provider-scoped credentials, default regions, and mock mode settings for adapter requests
+func (cm *ClientManager) DefaultAttrs(providerType string) map[string]interface{} {
+	pType := strings.ToLower(strings.TrimSpace(providerType))
+	base := cm.computeStaticDefaultAttrs(pType)
+
+	attrs := make(map[string]interface{}, len(base)+1)
+	for k, v := range base {
+		attrs[k] = v
+	}
+	if cm.IsMockMode() {
+		attrs["mock_mode"] = true
+	}
 	return attrs
 }
 
