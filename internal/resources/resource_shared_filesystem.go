@@ -147,7 +147,11 @@ func (r *SharedFilesystemResource) Update(ctx context.Context, req resource.Upda
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "shared_filesystem", plan.FilesystemName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := make(map[string]interface{})
+	if !plan.EncryptionEnabled.IsNull() && !plan.EncryptionEnabled.IsUnknown() {
+		extraAttrs["encryption_enabled"] = plan.EncryptionEnabled.ValueBool()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "shared_filesystem", plan.FilesystemName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
