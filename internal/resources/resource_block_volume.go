@@ -150,7 +150,13 @@ func (r *BlockVolumeResource) Update(ctx context.Context, req resource.UpdateReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "block_volume", plan.VolumeName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := map[string]interface{}{
+		"size_gb": plan.SizeGB.ValueInt64(),
+	}
+	if !plan.EncryptionEnabled.IsNull() && !plan.EncryptionEnabled.IsUnknown() {
+		extraAttrs["encryption_enabled"] = plan.EncryptionEnabled.ValueBool()
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "block_volume", plan.VolumeName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
