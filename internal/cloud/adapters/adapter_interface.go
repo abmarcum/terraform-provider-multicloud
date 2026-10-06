@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -57,6 +58,13 @@ func validatePreApplySecurity(provider, resType, cleanName string, extraAttrs ma
 		return fmt.Errorf("security policy violation [%s]: %s", violations[0].RuleName, violations[0].Message)
 	}
 
+	if os.Getenv("OPA_POLICY_PATH") != "" {
+		opaRes := security.EvaluateOPARegoPolicyWithAttrs(provider, resType, cleanName, "opa_policy_path", extraAttrs)
+		if !opaRes.Passed {
+			return fmt.Errorf("OPA policy violation: %s", opaRes.Violation)
+		}
+	}
+
 	for k, v := range extraAttrs {
 		if k == "aws_secret_key" || k == "gcp_credentials" || k == "azure_client_secret" || k == "azure_bearer_token" {
 			continue
@@ -79,6 +87,7 @@ func CreateCloudResource(ctx context.Context, provider, resType, name, region st
 	}
 
 	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	cleanRegion := sanitizer.SanitizeCloudIdentifier(region, "")
 	if err := validatePreApplySecurity(provider, resType, cleanName, extraAttrs); err != nil {
 		return ResourceResponse{}, err
 	}
@@ -87,7 +96,7 @@ func CreateCloudResource(ctx context.Context, provider, resType, name, region st
 		ResourceName: cleanName,
 		ResourceType: resType,
 		ProviderType: provider,
-		Region:       region,
+		Region:       cleanRegion,
 		Attributes:   extraAttrs,
 	}
 	resp, err := resiliency.ExecuteWithRetry(ctx, func() (ResourceResponse, error) {
@@ -112,11 +121,12 @@ func ReadCloudResourceWithAttrs(ctx context.Context, provider, resType, name, re
 	}
 
 	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	cleanRegion := sanitizer.SanitizeCloudIdentifier(region, "")
 	req := ResourceRequest{
 		ResourceName: cleanName,
 		ResourceType: resType,
 		ProviderType: provider,
-		Region:       region,
+		Region:       cleanRegion,
 		Attributes:   extraAttrs,
 	}
 	resp, err := resiliency.ExecuteWithRetry(ctx, func() (ResourceResponse, error) {
@@ -137,6 +147,7 @@ func UpdateCloudResource(ctx context.Context, provider, resType, name, region st
 	}
 
 	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	cleanRegion := sanitizer.SanitizeCloudIdentifier(region, "")
 	if err := validatePreApplySecurity(provider, resType, cleanName, extraAttrs); err != nil {
 		return ResourceResponse{}, err
 	}
@@ -145,7 +156,7 @@ func UpdateCloudResource(ctx context.Context, provider, resType, name, region st
 		ResourceName: cleanName,
 		ResourceType: resType,
 		ProviderType: provider,
-		Region:       region,
+		Region:       cleanRegion,
 		Attributes:   extraAttrs,
 	}
 	resp, err := resiliency.ExecuteWithRetry(ctx, func() (ResourceResponse, error) {
@@ -170,11 +181,12 @@ func DeleteCloudResourceWithAttrs(ctx context.Context, provider, resType, name, 
 	}
 
 	cleanName := sanitizer.SanitizeResourceName(name, provider, resType)
+	cleanRegion := sanitizer.SanitizeCloudIdentifier(region, "")
 	req := ResourceRequest{
 		ResourceName: cleanName,
 		ResourceType: resType,
 		ProviderType: provider,
-		Region:       region,
+		Region:       cleanRegion,
 		Attributes:   extraAttrs,
 	}
 	_, err = resiliency.ExecuteWithRetry(ctx, func() (bool, error) {
