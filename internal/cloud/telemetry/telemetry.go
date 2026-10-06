@@ -7,10 +7,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
+
+func isSafeOTLPEndpoint(rawURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "169.254.169.254" || host == "fd00:ec2::254" || host == "metadata.google.internal" || strings.HasPrefix(host, "169.254.") {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && (host == "127.0.0.1" || host == "localhost" || host == "::1"))
+}
 
 // TelemetryEvent models structured OpenTelemetry and audit logging events
 type TelemetryEvent struct {
@@ -75,7 +89,7 @@ func (t *TelemetryExporter) RecordEvent(eventType string, provider string, resou
 	}
 	t.mu.Unlock()
 
-	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" {
+	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" && isSafeOTLPEndpoint(endpoint) {
 		/* #nosec G107 G704 */
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint, bytes.NewReader(payload))
 		if err == nil {
