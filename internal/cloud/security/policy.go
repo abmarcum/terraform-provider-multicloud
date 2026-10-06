@@ -2,6 +2,7 @@ package security
 
 import (
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -20,7 +21,7 @@ func ValidatePolicy(resourceType string, resourceName string, attributes map[str
 		return violations
 	}
 
-	// Rule 1: Storage buckets must not be public and must not explicitly disable encryption
+	// Rule 1: Storage and backup resources must not be public and must not explicitly disable encryption
 	if strings.Contains(resourceType, "storage_bucket") {
 		if public, ok := attributes["is_public"].(bool); ok && public {
 			violations = append(violations, PolicyViolation{
@@ -30,12 +31,17 @@ func ValidatePolicy(resourceType string, resourceName string, attributes map[str
 				Message:      fmt.Sprintf("Resource '%s' violates security policy: Storage buckets cannot be publicly accessible.", resourceName),
 			})
 		}
+	}
+	if strings.Contains(resourceType, "storage_bucket") ||
+		strings.Contains(resourceType, "block_volume") ||
+		strings.Contains(resourceType, "shared_filesystem") ||
+		strings.Contains(resourceType, "backup_vault") {
 		if enc, ok := attributes["encryption_enabled"].(bool); ok && !enc {
 			violations = append(violations, PolicyViolation{
 				RuleName:     "STORAGE_ENCRYPTION_REQUIRED",
 				ResourceName: resourceName,
 				Severity:     "HIGH",
-				Message:      fmt.Sprintf("Resource '%s' violates security policy: Storage buckets must enable server-side encryption.", resourceName),
+				Message:      fmt.Sprintf("Resource '%s' violates security policy: Storage and backup resources must enable encryption at rest.", resourceName),
 			})
 		}
 	}
@@ -67,6 +73,18 @@ func ValidatePolicy(resourceType string, resourceName string, attributes map[str
 				ResourceName: resourceName,
 				Severity:     "HIGH",
 				Message:      fmt.Sprintf("Resource '%s' violates security policy: KMS keys must have automatic key rotation enabled.", resourceName),
+			})
+		}
+	}
+
+	// Rule 4: Network CIDR blocks must be valid IPv4/IPv6 CIDR notation
+	if cidr, ok := attributes["cidr_block"].(string); ok && strings.TrimSpace(cidr) != "" {
+		if _, _, err := net.ParseCIDR(strings.TrimSpace(cidr)); err != nil {
+			violations = append(violations, PolicyViolation{
+				RuleName:     "INVALID_CIDR_BLOCK",
+				ResourceName: resourceName,
+				Severity:     "HIGH",
+				Message:      fmt.Sprintf("Resource '%s' has an invalid cidr_block '%s'.", resourceName, cidr),
 			})
 		}
 	}
