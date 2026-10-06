@@ -34,3 +34,20 @@ func TestSanitizeResourceNameNestedTraversalAndNonStorage(t *testing.T) {
 	}
 }
 
+func TestSanitizeCloudIdentifierAndStripControlChars(t *testing.T) {
+	injectedRegion := "us-east-1@attacker.com:8443/path"
+	cleanRegion := SanitizeCloudIdentifier(injectedRegion, "us-east-1")
+	if cleanRegion != "us-east-1attackercom8443path" {
+		t.Errorf("expected URL authority characters to be stripped from region, got %q", cleanRegion)
+	}
+
+	if fallback := SanitizeCloudIdentifier("../../../", "us-central1"); fallback != "us-central1" {
+		t.Errorf("expected fallback 'us-central1', got %q", fallback)
+	}
+
+	ansiInput := "prod-bucket\x1b[31m-spoofed\x07"
+	if stripped := StripControlChars(ansiInput); stripped != "prod-bucket[31m-spoofed" {
+		t.Errorf("expected control characters to be stripped, got %q", stripped)
+	}
+}
+
