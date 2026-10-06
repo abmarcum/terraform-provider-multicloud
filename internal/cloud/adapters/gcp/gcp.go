@@ -3,6 +3,7 @@ package gcp
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ var (
 	defaultTokenSourceOnce sync.Once
 	defaultTokenSource     oauth2.TokenSource
 	defaultTokenSourceErr  error
+	gcpTokenSourceCache    sync.Map // map[[32]byte]oauth2.TokenSource
 )
 
 func validateGCPServiceAccountJSON(raw []byte) error {
@@ -54,6 +56,14 @@ func getGCPAccessToken(ctx context.Context, req common.ResourceRequest) (string,
 					raw = fileBytes
 				}
 			}
+			cacheKey := sha256.Sum256(raw)
+			if cachedTS, ok := gcpTokenSourceCache.Load(cacheKey); ok {
+				tok, err := cachedTS.(oauth2.TokenSource).Token()
+				if err != nil {
+					return "", fmt.Errorf("GCP OAuth2 token exchange failed: %w", err)
+				}
+				return tok.AccessToken, nil
+			}
 			if err := validateGCPServiceAccountJSON(raw); err != nil {
 				return "", err
 			}
@@ -61,6 +71,7 @@ func getGCPAccessToken(ctx context.Context, req common.ResourceRequest) (string,
 			if err != nil {
 				return "", fmt.Errorf("GCP credentials parse error: %w", err)
 			}
+			gcpTokenSourceCache.Store(cacheKey, creds.TokenSource)
 			tok, err := creds.TokenSource.Token()
 			if err != nil {
 				return "", fmt.Errorf("GCP OAuth2 token exchange failed: %w", err)
