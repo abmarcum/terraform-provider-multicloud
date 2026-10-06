@@ -61,7 +61,7 @@ func TestExecuteWithRetryNonRetryableFastFail(t *testing.T) {
 }
 
 func TestRedactSensitiveLogInfo(t *testing.T) {
-	rawErr := errors.New("HTTP 401 Unauthorized: Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.secret and api_key=supersecret123 failed")
+	rawErr := errors.New(`HTTP 401 Unauthorized: Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.secret and api_key=supersecret123 and {"client_secret": "jsonSecretVal", "password": "dbPassword123"} failed`)
 	redacted := RedactSensitiveLogInfo(rawErr)
 	if redacted == nil {
 		t.Fatalf("expected non-nil redacted error")
@@ -69,6 +69,9 @@ func TestRedactSensitiveLogInfo(t *testing.T) {
 	msg := redacted.Error()
 	if msg == rawErr.Error() {
 		t.Errorf("expected sensitive token and api_key to be redacted, got %q", msg)
+	}
+	if RedactSensitiveString(`{"client_secret": "jsonSecretVal"}`) == `{"client_secret": "jsonSecretVal"}` {
+		t.Errorf("expected JSON-formatted client_secret to be redacted, got %q", msg)
 	}
 }
 
