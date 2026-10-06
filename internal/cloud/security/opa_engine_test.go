@@ -80,4 +80,12 @@ deny[msg] {
 	if res.Passed {
 		t.Errorf("expected OPA_POLICY_PATH evaluation to fail on unencrypted bucket")
 	}
+
+	t.Setenv("OPA_POLICY_PATH", filepath.Join(tmpDir, "nonexistent.rego"))
+	res = EvaluateOPARegoPolicyWithAttrs("aws", "multicloud_storage_bucket", "test-bkt", "custom_rule", map[string]interface{}{
+		"encryption_enabled": true,
+	})
+	if res.Passed {
+		t.Errorf("expected missing OPA_POLICY_PATH file to fail closed")
+	}
 }
