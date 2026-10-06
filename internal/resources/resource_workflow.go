@@ -137,7 +137,10 @@ func (r *WorkflowResource) Update(ctx context.Context, req resource.UpdateReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "workflow", plan.WorkflowName.ValueString(), plan.ExtraConfig, nil, resp) {
+	extraAttrs := map[string]interface{}{
+		"definition": plan.Definition.ValueString(),
+	}
+	if !updateResourceLifecycle(ctx, r.clientManager, plan.ProviderType, plan.Region, "workflow", plan.WorkflowName.ValueString(), plan.ExtraConfig, extraAttrs, resp) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
