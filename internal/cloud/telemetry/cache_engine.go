@@ -19,7 +19,7 @@ type CacheEngine struct {
 // NewCacheEngine initializes a new CacheEngine
 func NewCacheEngine() *CacheEngine {
 	return &CacheEngine{
-		items: make(map[string]cacheItem),
+		items: make(map[string]cacheItem, 128),
 	}
 }
 
@@ -72,5 +72,5 @@ func (c *CacheEngine) Get(key string) (interface{}, bool) {
 func (c *CacheEngine) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.items = make(map[string]cacheItem)
+	c.items = make(map[string]cacheItem, 128)
 }
