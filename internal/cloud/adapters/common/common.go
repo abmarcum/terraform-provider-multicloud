@@ -36,16 +36,22 @@ type ResourceResponse struct {
 	Attributes map[string]interface{}
 }
 
-var HTTPClient = func() *http.Client {
+// NewHardenedHTTPClient creates an HTTP client with TLS 1.2+ and connection pooling tuned for concurrent Terraform operations.
+func NewHardenedHTTPClient(timeout time.Duration) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 100
+	transport.MaxIdleConnsPerHost = 32
+	transport.IdleConnTimeout = 90 * time.Second
 	transport.TLSClientConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
 	return &http.Client{
-		Timeout:   10 * time.Second,
+		Timeout:   timeout,
 		Transport: transport,
 	}
-}()
+}
+
+var HTTPClient = NewHardenedHTTPClient(10 * time.Second)
 
 func GetGCPProject(req ResourceRequest) (string, error) {
 	project := os.Getenv("GCP_PROJECT")
