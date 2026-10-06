@@ -66,7 +66,7 @@ func loadResources(statePath string) []ResourceSample {
 		}
 	}
 	if statePath != "" {
-		/* #nosec G304 */
+		/* #nosec G304 G703 */
 		data, err := os.ReadFile(filepath.Clean(statePath))
 		if err == nil {
 			var state TFState
@@ -76,12 +76,13 @@ func loadResources(statePath string) []ResourceSample {
 					if r.Mode != "managed" || !strings.HasPrefix(r.Type, "multicloud_") {
 						continue
 					}
-					cleanType := strings.TrimPrefix(r.Type, "multicloud_")
+					cleanType := sanitizer.StripControlChars(strings.TrimPrefix(r.Type, "multicloud_"))
 					for _, inst := range r.Instances {
 						pType, _ := inst.Attributes["provider_type"].(string)
 						if pType == "" {
 							pType = "gcp"
 						}
+						pType = sanitizer.SanitizeCloudIdentifier(pType, "gcp")
 						tier, _ := inst.Attributes["size_tier"].(string)
 						resName := r.Name
 						if nameAttr, ok := inst.Attributes["bucket_name"].(string); ok && nameAttr != "" {
@@ -104,10 +105,10 @@ func loadResources(statePath string) []ResourceSample {
 							isEncrypted = enc
 						}
 						parsed = append(parsed, ResourceSample{
-							Name:      resName,
+							Name:      sanitizer.SanitizeResourceName(resName, pType, cleanType),
 							Provider:  pType,
 							Type:      cleanType,
-							Tier:      tier,
+							Tier:      sanitizer.StripControlChars(tier),
 							Public:    isPublic,
 							Encrypted: isEncrypted,
 						})
@@ -137,7 +138,7 @@ func loadResourcesFromHCL(dir string) []ResourceSample {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		/* #nosec G304 */
+		/* #nosec G304 G703 */
 		content, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			continue
@@ -149,8 +150,8 @@ func loadResourcesFromHCL(dir string) []ResourceSample {
 			if strings.HasPrefix(line, "resource \"multicloud_") {
 				parts := strings.Split(line, "\"")
 				if len(parts) >= 4 {
-					rType := strings.TrimPrefix(parts[1], "multicloud_")
-					rName := parts[3]
+					rType := sanitizer.StripControlChars(strings.TrimPrefix(parts[1], "multicloud_"))
+					rName := sanitizer.StripControlChars(parts[3])
 					cur = &ResourceSample{
 						Name:      rName,
 						Provider:  "gcp",
@@ -168,7 +169,7 @@ func loadResourcesFromHCL(dir string) []ResourceSample {
 				}
 				if idx := strings.Index(line, "="); idx > 0 {
 					key := strings.TrimSpace(line[:idx])
-					val := strings.Trim(strings.TrimSpace(line[idx+1:]), "\"")
+					val := sanitizer.StripControlChars(strings.Trim(strings.TrimSpace(line[idx+1:]), "\""))
 					switch key {
 					case "provider_type":
 						cur.Provider = val
@@ -201,7 +202,7 @@ func formatProviderBadge(provider string) string {
 	case "azure":
 		return fmt.Sprintf("%s%s AZURE %s", Blue, Bold, Reset)
 	default:
-		return strings.ToUpper(provider)
+		return strings.ToUpper(sanitizer.StripControlChars(provider))
 	}
 }
 
@@ -274,7 +275,8 @@ func renderCostTable() {
 	totalCost := 0.0
 	for _, r := range activeResources {
 		cleanName := sanitizer.SanitizeResourceName(r.Name, r.Provider, r.Type)
-		cost := pricing.EstimateMonthlyCost(r.Provider, r.Type, r.Tier)
+		cleanType := sanitizer.StripControlChars(r.Type)
+		cost := pricing.EstimateMonthlyCost(r.Provider, cleanType, r.Tier)
 		totalCost += cost
 
 		var rawCostStr, colorCode string
@@ -287,7 +289,7 @@ func renderCostTable() {
 		}
 
 		pBadge := formatProviderBadge(r.Provider)
-		fmt.Printf("│ %s%-34s%s │ %-17s │ %s%-20s%s │ %s%-29s%s │\n", White, cleanName, Reset, pBadge, Dim, r.Type, Reset, colorCode, rawCostStr, Reset)
+		fmt.Printf("│ %s%-34s%s │ %-17s │ %s%-20s%s │ %s%-29s%s │\n", White, cleanName, Reset, pBadge, Dim, cleanType, Reset, colorCode, rawCostStr, Reset)
 	}
 
 	fmt.Printf("%s├──────────────────────────────────┴──────────────────┴──────────────────────┴───────────────────────────────┤%s\n", Dim, Reset)
@@ -301,7 +303,8 @@ func renderSecurityAudit() {
 
 	findingsCount := 0
 	for _, r := range activeResources {
-		findings := security.AuditResource(r.Provider, r.Type, r.Name, r.Public, r.Encrypted)
+		cleanName := sanitizer.SanitizeResourceName(r.Name, r.Provider, r.Type)
+		findings := security.AuditResource(r.Provider, r.Type, cleanName, r.Public, r.Encrypted)
 		for _, f := range findings {
 			findingsCount++
 			sevColor := Yellow
@@ -323,7 +326,8 @@ func renderCostOptimizations() {
 
 	recsCount := 0
 	for _, r := range activeResources {
-		if rec := pricing.RecommendCostOptimizations(r.Provider, r.Name, r.Tier); rec != nil {
+		cleanName := sanitizer.SanitizeResourceName(r.Name, r.Provider, r.Type)
+		if rec := pricing.RecommendCostOptimizations(r.Provider, cleanName, r.Tier); rec != nil {
 			recsCount++
 			fmt.Printf("  %s💡%s %s\n", Green, Reset, rec.Message)
 		}
