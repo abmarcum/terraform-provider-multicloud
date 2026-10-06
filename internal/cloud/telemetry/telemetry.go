@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -40,6 +39,9 @@ const maxBufferedEvents = 512
 
 var otlpHTTPClient = func() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 32
+	transport.MaxIdleConnsPerHost = 16
+	transport.IdleConnTimeout = 90 * time.Second
 	transport.TLSClientConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
@@ -52,16 +54,18 @@ var otlpHTTPClient = func() *http.Client {
 // DefaultExporter is the shared telemetry exporter used across cloud adapter lifecycles
 var DefaultExporter = NewTelemetryExporter()
 
-// TelemetryExporter outputs structured OpenTelemetry JSON logs and buffers events for inspection
+// TelemetryExporter outputs structured OpenTelemetry JSON logs and buffers events in a circular ring buffer
 type TelemetryExporter struct {
 	mu     sync.RWMutex
 	events []TelemetryEvent
+	head   int
+	count  int
 }
 
 // NewTelemetryExporter returns a new TelemetryExporter instance
 func NewTelemetryExporter() *TelemetryExporter {
 	return &TelemetryExporter{
-		events: make([]TelemetryEvent, 0, 64),
+		events: make([]TelemetryEvent, maxBufferedEvents),
 	}
 }
 
@@ -82,10 +86,13 @@ func (t *TelemetryExporter) RecordEvent(eventType string, provider string, resou
 	}
 
 	t.mu.Lock()
-	if len(t.events) >= maxBufferedEvents {
-		t.events = append(t.events[1:], event)
+	if t.count < maxBufferedEvents {
+		idx := (t.head + t.count) % maxBufferedEvents
+		t.events[idx] = event
+		t.count++
 	} else {
-		t.events = append(t.events, event)
+		t.events[t.head] = event
+		t.head = (t.head + 1) % maxBufferedEvents
 	}
 	t.mu.Unlock()
 
@@ -101,15 +108,16 @@ func (t *TelemetryExporter) RecordEvent(eventType string, provider string, resou
 		}
 	}
 
-	out := fmt.Sprintf("[TelemetryExporter] %s", string(payload))
-	return out, nil
+	return "[TelemetryExporter] " + string(payload), nil
 }
 
-// Events returns a snapshot of recorded telemetry events
+// Events returns a chronological snapshot of recorded telemetry events
 func (t *TelemetryExporter) Events() []TelemetryEvent {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	copied := make([]TelemetryEvent, len(t.events))
-	copy(copied, t.events)
+	copied := make([]TelemetryEvent, t.count)
+	for i := 0; i < t.count; i++ {
+		copied[i] = t.events[(t.head+i)%maxBufferedEvents]
+	}
 	return copied
 }
