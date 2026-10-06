@@ -137,6 +137,18 @@ func FetchLiveAzurePriceWithContext(ctx context.Context, skuName string) (float6
 	return 0, fmt.Errorf("no pricing found for SKU %s", skuName)
 }
 
+func isSafePricingOfferURL(rawURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "169.254.169.254" || host == "fd00:ec2::254" || host == "metadata.google.internal" || strings.HasPrefix(host, "169.254.") {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && (host == "127.0.0.1" || host == "localhost" || host == "::1"))
+}
+
 // FetchLiveAWSPrice fetches pricing rate for AWS EC2 instance types, querying AWS Price List endpoint when configured
 func FetchLiveAWSPrice(instanceType string) (float64, error) {
 	cacheKey := "aws:" + instanceType
@@ -144,7 +156,7 @@ func FetchLiveAWSPrice(instanceType string) (float64, error) {
 		return cached, nil
 	}
 
-	if offerURL := os.Getenv("AWS_PRICING_OFFER_URL"); offerURL != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" {
+	if offerURL := os.Getenv("AWS_PRICING_OFFER_URL"); offerURL != "" && os.Getenv("MULTICLOUD_MOCK_MODE") != "true" && isSafePricingOfferURL(offerURL) {
 		/* #nosec G107 G704 */
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, offerURL, nil)
 		if err == nil {
