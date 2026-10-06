@@ -12,16 +12,7 @@ import (
 
 // isReservedExtraConfigKey blocks untrusted extra_config entries from overriding provider credentials or mock_mode.
 func isReservedExtraConfigKey(k string) bool {
-	switch strings.ToLower(strings.TrimSpace(k)) {
-	case "_client_manager",
-		"aws_access_key", "aws_secret_key", "aws_profile",
-		"gcp_credentials",
-		"azure_client_secret", "azure_bearer_token", "azure_tenant_id", "azure_client_id",
-		"mock_mode", "provider_default_region":
-		return true
-	default:
-		return false
-	}
+	return adapters.IsSensitiveOrInternalKey(k)
 }
 
 // buildResourceExtraAttrs merges provider-level default attributes from ClientManager,
