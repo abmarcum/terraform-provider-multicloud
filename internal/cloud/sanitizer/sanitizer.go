@@ -90,3 +90,34 @@ func SanitizeResourceName(rawName string, providerType string, resourceType stri
 
 	return name
 }
+
+var identifierSanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
+
+// SanitizeCloudIdentifier restricts regions, project IDs, subscription IDs, and resource groups
+// to safe alphanumeric, hyphen, and underscore characters to prevent URL host/authority injection.
+func SanitizeCloudIdentifier(raw string, fallback string) string {
+	cleaned := strings.TrimSpace(raw)
+	for strings.Contains(cleaned, "..") {
+		cleaned = strings.ReplaceAll(cleaned, "..", "")
+	}
+	cleaned = identifierSanitizeRegex.ReplaceAllString(cleaned, "")
+	cleaned = strings.Trim(cleaned, "-_")
+	if cleaned == "" {
+		return fallback
+	}
+	if len(cleaned) > 128 {
+		cleaned = cleaned[:128]
+	}
+	return cleaned
+}
+
+// StripControlChars removes ASCII control characters and ANSI escape sequences from untrusted strings
+// before rendering them in CLI or TUI output.
+func StripControlChars(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+}
