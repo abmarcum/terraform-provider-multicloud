@@ -790,25 +790,22 @@ Unified L7 service mesh control plane.
 ## 9. Data Sources
 
 ### `data "multicloud_resource"`
-Reads live or mock state and attributes for an existing cloud resource.
+Reads live or mock state and status for an existing cloud resource.
 - **Attributes:**
+  - `name` (String, Required) - Target resource name to read.
+  - `resource_type` (String, Required) - Unified resource type name (e.g., `'storage_bucket'`, `'virtual_machine'`).
   - `provider_type` (String, Required) - `'aws'`, `'gcp'`, or `'azure'`.
-  - `resource_type` (String, Required) - Unified resource type name.
-  - `resource_name` (String, Required) - Upstream resource identifier.
   - `region` (String, Optional) - Target cloud region.
-  - `status` (String, Read-Only) - Upstream resource status.
-  - `attributes` (Map[String], Read-Only) - Upstream resource attributes.
+  - `id` (String, Read-Only) - Discovered resource ID.
+  - `status` (String, Read-Only) - Upstream resource status (`'active'`, `'missing'`).
 
 ### `data "multicloud_cost_estimate"`
 Calculates pre-apply monthly USD costs and Arm64 optimization savings.
 - **Attributes:**
   - `provider_type` (String, Required) - `'aws'`, `'gcp'`, or `'azure'`.
   - `resource_type` (String, Required) - Unified resource type name.
-  - `size_tier` (String, Optional) - `'small'`, `'medium'`, `'large'`, or explicit SKU.
-  - `monthly_cost` (Float64, Read-Only) - Estimated monthly spend in USD.
-  - `suggested_tier` (String, Read-Only) - Suggested Arm64 SKU.
-  - `estimated_saving` (Float64, Read-Only) - Monthly USD savings.
-  - `optimization_note` (String, Read-Only) - FinOps optimization guidance.
-
-
-
+  - `size_tier` (String, Required) - `'small'`, `'medium'`, `'large'`, or explicit SKU.
+  - `id` (String, Read-Only) - Computed estimate identifier.
+  - `monthly_cost_usd` (Float64, Read-Only) - Estimated monthly spend in USD.
+  - `suggested_tier` (String, Read-Only) - Suggested cost-optimized SKU.
+  - `estimated_saving_usd` (Float64, Read-Only) - Monthly USD savings if optimized.
